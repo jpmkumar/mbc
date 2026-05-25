@@ -1,0 +1,26 @@
+{
+  "mammo": {
+    "total": 2966,
+    "benign": 1469,
+    "malignant": 1497,
+    "train": 2076,
+    "val": 445,
+    "test": 445
+  },
+  "ultrasound": {
+    "total": 80,
+    "benign": 40,
+    "malignant": 40,
+    "train": 55,
+    "val": 12,
+    "test": 13
+  },
+  "thermo": {
+    "total": 80,
+    "benign": 40,
+    "malignant": 40,
+    "train": 55,
+    "val": 12,
+    "test": 13
+  }
+}

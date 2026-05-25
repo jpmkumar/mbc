@@ -1,0 +1,57 @@
+# Default experiment configuration — Modality-Level Hybrid Quantum Framework
+
+project:
+  name: "Modality-Level Generalized Hybrid Quantum Framework"
+  seed: 42
+
+data:
+  root: "data/processed"
+  image_size: 224
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  num_workers: 4
+  modalities:
+    - mammo
+    - ultrasound
+    - thermo
+
+model:
+  encoder: "efficientnet_b0"
+  encoder_dim: 1280
+  projection_dim: 2048
+  transformer:
+    num_layers: 2
+    num_heads: 4
+    dim_feedforward: 512
+    dropout: 0.1
+  compression_dims: [128, 32, 8]
+  num_modality_tokens: 3
+  num_classes: 2
+  quantum:
+    n_qubits: 8
+    n_layers: 2
+    entanglement: "linear"
+
+training:
+  batch_size: 16
+  stage_a_epochs: 20   # classical head only
+  stage_b_epochs: 30   # VQC head (frozen backbone)
+  stage_c_epochs: 5    # joint fine-tune (reduced)
+  lr_classical: 1.0e-4
+  lr_quantum: 1.0e-4   # lower — was 1e-3, caused VQC instability
+  lr_joint: 1.0e-5
+  weight_decay: 1.0e-4
+  freeze_encoder_epochs: 5
+  freeze_backbone_in_stage_b: true
+  selection_metric: balanced_accuracy
+  use_class_weights: true
+
+experiments:
+  seeds: [42, 43, 44]
+  qubit_sweep: [4, 6, 8]
+
+paths:
+  results: "results"
+  figures: "figures"
+  checkpoints: "results/checkpoints"

@@ -1,0 +1,52 @@
+{
+  "shap": {
+    "mean_abs_shap": [
+      0.010322712292273863,
+      0.0,
+      7.359108328819743e-05,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "feature_dim": 8
+  },
+  "vqc_gates": {
+    "gate_importance": [
+      {
+        "qubit": 0,
+        "importance": 0.0033282041549682617
+      },
+      {
+        "qubit": 1,
+        "importance": 0.00022414326667785645
+      },
+      {
+        "qubit": 2,
+        "importance": 4.488229751586914e-05
+      },
+      {
+        "qubit": 3,
+        "importance": 0.0
+      },
+      {
+        "qubit": 4,
+        "importance": 0.0
+      },
+      {
+        "qubit": 5,
+        "importance": 0.0
+      },
+      {
+        "qubit": 6,
+        "importance": 0.0
+      },
+      {
+        "qubit": 7,
+        "importance": 0.0
+      }
+    ],
+    "n_qubits": 8
+  }
+}
