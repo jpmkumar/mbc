@@ -38,7 +38,19 @@ def main():
         config = yaml.safe_load(f)
 
     set_seed(args.seed)
-    splits = load_splits(str(ROOT / "data/splits"))
+
+    splits_dir = ROOT / "data/splits"
+    train_csv = splits_dir / "train.csv"
+    if not train_csv.exists():
+        mammo = ROOT / "data/processed/mammo"
+        raise SystemExit(
+            "Missing data/splits/train.csv — splits are not in GitHub.\n"
+            "1. Link mammography: data/processed/mammo/\n"
+            "2. Run: python data/download/setup_datasets.py\n"
+            f"   (mammo dir exists: {mammo.exists()})"
+        )
+
+    splits = load_splits(str(splits_dir))
     loaders = create_dataloaders(
         splits,
         batch_size=config["training"]["batch_size"],
