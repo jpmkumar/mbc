@@ -11,15 +11,25 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.data.dataloaders import create_dataloaders
-from src.data.splits import load_splits
-from src.models.hybrid_model import ClassicalBreastCancerModel, HybridBreastCancerModel
-from src.train.seed import set_seed
-from src.train.trainer import HybridTrainer
+STAGE_CHOICES = ("a", "b", "c", "all")
+STAGE_MAP = {"a": "stage_a", "b": "stage_b", "c": "stage_c"}
+
+
+def _resolve_stages(stage_arg: str) -> list[str] | None:
+    if stage_arg == "all":
+        return None
+    return [STAGE_MAP[stage_arg]]
+
+
+def _default_resume_path(exp_name: str) -> Path | None:
+    latest = ROOT / "results/checkpoints" / f"{exp_name}_latest.pt"
+    return latest if latest.exists() else None
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Train hybrid/classical model. Use --stage and --resume for Colab sessions."
+    )
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--experiment", default="E3", choices=["E2", "E3", "classical", "hybrid"])
     parser.add_argument("--seed", type=int, default=42)
@@ -30,7 +40,29 @@ def main():
         choices=["mammo", "ultrasound", "thermo"],
         help="Train on one modality only (use mammo for real CBIS-DDSM)",
     )
+    parser.add_argument(
+        "--stage",
+        default="all",
+        choices=STAGE_CHOICES,
+        help="Run one stage (a=classical, b=VQC, c=joint) or all",
+    )
+    parser.add_argument(
+        "--resume",
+        default=None,
+        help="Checkpoint to resume (.pt). Default: results/checkpoints/{exp}_latest.pt if exists",
+    )
+    parser.add_argument(
+        "--no-auto-resume",
+        action="store_true",
+        help="Ignore existing _latest.pt checkpoint",
+    )
     args = parser.parse_args()
+
+    from src.data.dataloaders import create_dataloaders
+    from src.data.splits import load_splits
+    from src.models.hybrid_model import ClassicalBreastCancerModel, HybridBreastCancerModel
+    from src.train.seed import set_seed
+    from src.train.trainer import HybridTrainer
 
     modality_filter = [args.modality] if args.modality else None
 
@@ -91,7 +123,6 @@ def main():
         experiment_name=exp_name,
     )
     if args.quick:
-        # Enough epochs for EfficientNet to learn on real mammo (~2k images)
         trainer.stage_a_epochs = 15
         trainer.stage_b_epochs = 5
         trainer.stage_c_epochs = 2
@@ -100,7 +131,23 @@ def main():
             trainer.stage_b_epochs = 0
             trainer.stage_c_epochs = 0
 
-    metrics = trainer.train()
+    stages_filter = _resolve_stages(args.stage)
+    resume_path = args.resume
+    if resume_path is None and not args.no_auto_resume:
+        default_latest = _default_resume_path(exp_name)
+        if default_latest:
+            resume_path = str(default_latest)
+            print(f"Auto-resuming from {resume_path}")
+    elif resume_path:
+        resume_path = str(resume_path)
+
+    if stages_filter and stages_filter[0] != "stage_a" and resume_path is None:
+        default_best = ROOT / "results/checkpoints" / f"{exp_name}.pt"
+        if default_best.exists():
+            resume_path = str(default_best)
+            print(f"Stage {args.stage} requires weights — using {resume_path}")
+
+    metrics = trainer.train(stages_filter=stages_filter, resume_path=resume_path)
     print(json.dumps(metrics, indent=2))
 
 

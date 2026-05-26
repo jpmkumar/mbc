@@ -15,6 +15,8 @@ from .seed import set_seed
 
 
 class HybridTrainer:
+    STAGES = ("stage_a", "stage_b", "stage_c")
+
     def __init__(
         self,
         model: nn.Module,
@@ -37,6 +39,10 @@ class HybridTrainer:
         self.experiment_name = experiment_name
         self.results_dir = Path(config.get("paths", {}).get("results", "results"))
         self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.ckpt_dir = Path(
+            config.get("paths", {}).get("checkpoints", "results/checkpoints")
+        )
+        self.ckpt_dir.mkdir(parents=True, exist_ok=True)
 
         train_cfg = config.get("training", {})
         self.stage_a_epochs = train_cfg.get("stage_a_epochs", 20)
@@ -58,6 +64,10 @@ class HybridTrainer:
             self.criterion = nn.CrossEntropyLoss()
 
         self.history = {"train_loss": [], "val_metrics": []}
+        self.best_score = -1.0
+        self.best_state = None
+        self.stage_epochs_done = {s: 0 for s in self.STAGES}
+        self.total_epochs = 0
 
     @staticmethod
     def _default_device() -> str:
@@ -66,6 +76,20 @@ class HybridTrainer:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return "mps"
         return "cpu"
+
+    def _build_stage_plan(self, stages_filter: list[str] | None) -> list[tuple[str, int]]:
+        stages = [
+            ("stage_a", self.stage_a_epochs),
+            ("stage_b", self.stage_b_epochs),
+            ("stage_c", self.stage_c_epochs),
+        ]
+        if not getattr(self.model, "use_quantum", False):
+            stages = [("stage_a", self.stage_a_epochs + self.stage_b_epochs)]
+
+        if stages_filter:
+            allowed = set(stages_filter)
+            stages = [(name, n) for name, n in stages if name in allowed]
+        return stages
 
     def _configure_stage(self, stage: str):
         if hasattr(self.model, "set_training_stage"):
@@ -132,7 +156,6 @@ class HybridTrainer:
 
     def _score(self, metrics: dict) -> float:
         rate = metrics.get("pred_positive_rate", 0.5)
-        # Reject all-one-class predictions (collapse)
         if rate >= 0.95 or rate <= 0.05:
             return -1.0
         return float(metrics.get(self.selection_metric, metrics.get("f1", 0.0)))
@@ -185,22 +208,86 @@ class HybridTrainer:
             }
         ]
 
-    def train(self) -> dict:
-        best_score = -1.0
-        best_state = None
-        total_epochs = 0
+    def _latest_ckpt_path(self) -> Path:
+        return self.ckpt_dir / f"{self.experiment_name}_latest.pt"
 
-        stages = [
-            ("stage_a", self.stage_a_epochs),
-            ("stage_b", self.stage_b_epochs),
-            ("stage_c", self.stage_c_epochs),
-        ]
+    def _best_ckpt_path(self) -> Path:
+        return self.ckpt_dir / f"{self.experiment_name}.pt"
 
-        if not getattr(self.model, "use_quantum", False):
-            stages = [("stage_a", self.stage_a_epochs + self.stage_b_epochs)]
+    def _progress_path(self) -> Path:
+        return self.results_dir / f"{self.experiment_name}_progress.json"
+
+    def _save_checkpoint(self, stage_name: str):
+        payload = {
+            "model_state_dict": {k: v.cpu() for k, v in self.model.state_dict().items()},
+            "best_state_dict": self.best_state,
+            "best_score": self.best_score,
+            "total_epochs": self.total_epochs,
+            "stage_epochs_done": dict(self.stage_epochs_done),
+            "history": self.history,
+            "experiment_name": self.experiment_name,
+            "current_stage": stage_name,
+        }
+        torch.save(payload, self._latest_ckpt_path())
+        if self.best_state:
+            torch.save(self.best_state, self._best_ckpt_path())
+
+        progress = {
+            "experiment": self.experiment_name,
+            "total_epochs": self.total_epochs,
+            "stage_epochs_done": self.stage_epochs_done,
+            "stage_targets": {
+                "stage_a": self.stage_a_epochs,
+                "stage_b": self.stage_b_epochs,
+                "stage_c": self.stage_c_epochs,
+            },
+            "best_score": self.best_score,
+            "latest_checkpoint": str(self._latest_ckpt_path()),
+            "best_checkpoint": str(self._best_ckpt_path()),
+        }
+        with open(self._progress_path(), "w") as f:
+            json.dump(progress, f, indent=2)
+
+    def _load_checkpoint(self, resume_path: Path):
+        ckpt = torch.load(resume_path, map_location="cpu", weights_only=False)
+
+        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+            self.model.load_state_dict(ckpt["model_state_dict"])
+            self.best_state = ckpt.get("best_state_dict")
+            self.best_score = ckpt.get("best_score", -1.0)
+            self.total_epochs = ckpt.get("total_epochs", 0)
+            self.stage_epochs_done.update(ckpt.get("stage_epochs_done", {}))
+            self.history = ckpt.get("history", self.history)
+            print(f"Resumed from {resume_path}")
+            print(f"  total_epochs={self.total_epochs}, stage progress={self.stage_epochs_done}")
+            return
+
+        # Legacy checkpoint: weights only
+        self.model.load_state_dict(ckpt)
+        self.best_state = {k: v.cpu().clone() for k, v in ckpt.items()}
+        print(f"Loaded legacy weights from {resume_path}")
+
+    def train(
+        self,
+        stages_filter: list[str] | None = None,
+        resume_path: str | Path | None = None,
+    ) -> dict:
+        if resume_path:
+            self._load_checkpoint(Path(resume_path))
+        elif self._latest_ckpt_path().exists() and stages_filter is None:
+            pass  # fresh run
+
+        stages = self._build_stage_plan(stages_filter)
+        if not stages:
+            raise ValueError("No training stages selected.")
 
         t0 = time.time()
         for stage_name, n_epochs in stages:
+            already_done = self.stage_epochs_done.get(stage_name, 0)
+            if already_done >= n_epochs:
+                print(f"Skipping {stage_name} ({already_done}/{n_epochs} epochs done)")
+                continue
+
             self._configure_stage(stage_name)
             param_groups = self._get_param_groups(stage_name)
             optimizer = torch.optim.AdamW(
@@ -208,23 +295,32 @@ class HybridTrainer:
                 weight_decay=self.config.get("training", {}).get("weight_decay", 1e-4),
             )
 
-            for epoch in range(n_epochs):
-                loss = self._run_epoch(optimizer, total_epochs, stage_name)
+            for epoch in range(already_done, n_epochs):
+                loss = self._run_epoch(optimizer, self.total_epochs, stage_name)
                 val_metrics = self.evaluate()
                 self.history["train_loss"].append(loss)
-                self.history["val_metrics"].append(val_metrics)
+                self.history["val_metrics"].append(
+                    {k: v for k, v in val_metrics.items() if k not in ("labels", "preds", "probs", "roc")}
+                )
 
                 score = self._score(val_metrics)
-                if score > best_score:
-                    best_score = score
-                    best_state = {
+                if score > self.best_score:
+                    self.best_score = score
+                    self.best_state = {
                         k: v.cpu().clone() for k, v in self.model.state_dict().items()
                     }
 
-                total_epochs += 1
+                self.total_epochs += 1
+                self.stage_epochs_done[stage_name] = epoch + 1
+                self._save_checkpoint(stage_name)
+                print(
+                    f"{stage_name} epoch {epoch+1}/{n_epochs} | "
+                    f"val {self.selection_metric}={val_metrics.get(self.selection_metric, 0):.3f} | "
+                    f"best={self.best_score:.3f}"
+                )
 
-        if best_state:
-            self.model.load_state_dict(best_state)
+        if self.best_state:
+            self.model.load_state_dict(self.best_state)
 
         eval_loader = self.test_loader or self.val_loader
         split_name = "test" if self.test_loader is not None else "val"
@@ -232,7 +328,8 @@ class HybridTrainer:
         final_metrics["train_time_s"] = time.time() - t0
         final_metrics["eval_split"] = split_name
         final_metrics["selection_metric"] = self.selection_metric
-        final_metrics["best_val_score"] = best_score
+        final_metrics["best_val_score"] = self.best_score
+        final_metrics["stage_epochs_done"] = dict(self.stage_epochs_done)
 
         serializable = {
             k: v
@@ -243,11 +340,9 @@ class HybridTrainer:
         with open(out_path, "w") as f:
             json.dump(serializable, f, indent=2)
 
-        ckpt_dir = Path(
-            self.config.get("paths", {}).get("checkpoints", "results/checkpoints")
-        )
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(best_state, ckpt_dir / f"{self.experiment_name}.pt")
+        if self.best_state:
+            torch.save(self.best_state, self._best_ckpt_path())
+        self._save_checkpoint(stages[-1][0])
 
         history_path = self.results_dir / f"{self.experiment_name}_history.json"
         with open(history_path, "w") as f:
