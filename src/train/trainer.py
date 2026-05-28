@@ -66,6 +66,7 @@ class HybridTrainer:
         self.history = {"train_loss": [], "val_metrics": []}
         self.best_score = -1.0
         self.best_state = None
+        self.best_stage = "stage_a"
         self.stage_epochs_done = {s: 0 for s in self.STAGES}
         self.total_epochs = 0
 
@@ -227,6 +228,7 @@ class HybridTrainer:
             "history": self.history,
             "experiment_name": self.experiment_name,
             "current_stage": stage_name,
+            "best_stage": self.best_stage,
         }
         torch.save(payload, self._latest_ckpt_path())
         if self.best_state:
@@ -242,6 +244,7 @@ class HybridTrainer:
                 "stage_c": self.stage_c_epochs,
             },
             "best_score": self.best_score,
+            "best_stage": self.best_stage,
             "latest_checkpoint": str(self._latest_ckpt_path()),
             "best_checkpoint": str(self._best_ckpt_path()),
         }
@@ -255,6 +258,7 @@ class HybridTrainer:
             self.model.load_state_dict(ckpt["model_state_dict"])
             self.best_state = ckpt.get("best_state_dict")
             self.best_score = ckpt.get("best_score", -1.0)
+            self.best_stage = ckpt.get("best_stage", "stage_a")
             self.total_epochs = ckpt.get("total_epochs", 0)
             self.stage_epochs_done.update(ckpt.get("stage_epochs_done", {}))
             self.history = ckpt.get("history", self.history)
@@ -306,6 +310,7 @@ class HybridTrainer:
                 score = self._score(val_metrics)
                 if score > self.best_score:
                     self.best_score = score
+                    self.best_stage = stage_name
                     self.best_state = {
                         k: v.cpu().clone() for k, v in self.model.state_dict().items()
                     }
@@ -321,6 +326,8 @@ class HybridTrainer:
 
         if self.best_state:
             self.model.load_state_dict(self.best_state)
+            if hasattr(self.model, "set_training_stage"):
+                self.model.set_training_stage(self.best_stage)
 
         eval_loader = self.test_loader or self.val_loader
         split_name = "test" if self.test_loader is not None else "val"
@@ -329,6 +336,7 @@ class HybridTrainer:
         final_metrics["eval_split"] = split_name
         final_metrics["selection_metric"] = self.selection_metric
         final_metrics["best_val_score"] = self.best_score
+        final_metrics["best_stage"] = self.best_stage
         final_metrics["stage_epochs_done"] = dict(self.stage_epochs_done)
 
         serializable = {

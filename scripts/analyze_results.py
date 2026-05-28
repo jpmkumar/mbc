@@ -46,6 +46,12 @@ def main():
     parser.add_argument("--split", default="val", choices=["train", "val", "test"])
     parser.add_argument("--modality", default=None, choices=["mammo", "ultrasound", "thermo"])
     parser.add_argument("--classical", action="store_true")
+    parser.add_argument(
+        "--eval-stage",
+        default="a",
+        choices=["a", "b", "c"],
+        help="Head for hybrid eval: a=classical (Stage A), b=VQC, c=VQC",
+    )
     args = parser.parse_args()
 
     with open(ROOT / args.config) as f:
@@ -63,11 +69,26 @@ def main():
     loader = loaders[args.split]
 
     model = load_model(config, hybrid=not args.classical)
-    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
-    model.load_state_dict(ckpt)
+    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    if isinstance(ckpt, dict) and "best_state_dict" in ckpt and ckpt["best_state_dict"]:
+        model.load_state_dict(ckpt["best_state_dict"])
+        best_stage = ckpt.get("best_stage", "stage_a")
+    elif isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        model.load_state_dict(ckpt["model_state_dict"])
+        best_stage = ckpt.get("best_stage", "stage_a")
+    else:
+        model.load_state_dict(ckpt)
+        best_stage = "stage_a"
     model.eval()
     if hasattr(model, "set_training_stage"):
-        model.set_training_stage("stage_b" if model.use_quantum else "stage_a")
+        stage = args.eval_stage
+        if stage in ("b", "c"):
+            model.set_training_stage("stage_b")
+        else:
+            model.set_training_stage("stage_a")
+        report_stage = stage
+    else:
+        report_stage = "classical"
 
     labels, preds, probs = [], [], []
     with torch.no_grad():
@@ -84,6 +105,8 @@ def main():
     report = {
         "checkpoint": str(args.checkpoint),
         "split": args.split,
+        "eval_stage": report_stage,
+        "best_stage_in_ckpt": best_stage if hasattr(model, "use_quantum") else "classical",
         "modality_filter": args.modality,
         "label_distribution": dict(Counter(labels)),
         "pred_distribution": dict(Counter(preds)),
