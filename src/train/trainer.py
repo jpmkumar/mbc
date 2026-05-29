@@ -52,6 +52,12 @@ class HybridTrainer:
         self.freeze_backbone_in_stage_b = train_cfg.get(
             "freeze_backbone_in_stage_b", True
         )
+        self.backbone_eval_in_stage_b = train_cfg.get(
+            "backbone_eval_in_stage_b", True
+        )
+        self.quantum_weight_decay = train_cfg.get(
+            "quantum_weight_decay", train_cfg.get("weight_decay", 1e-4)
+        )
         self.selection_metric = train_cfg.get(
             "selection_metric", "balanced_accuracy"
         )
@@ -108,17 +114,31 @@ class HybridTrainer:
             self.model.set_backbone_trainable(not freeze_backbone)
             self.model.set_classical_head_trainable(False)
             self.model.set_vqc_head_trainable(True)
+            if hasattr(self.model, "set_backbone_eval_mode"):
+                self.model.set_backbone_eval_mode(
+                    freeze_backbone and self.backbone_eval_in_stage_b
+                )
         else:
+            if hasattr(self.model, "set_backbone_eval_mode"):
+                self.model.set_backbone_eval_mode(False)
             self.model.set_backbone_trainable(True)
             self.model.set_classical_head_trainable(False)
             self.model.set_vqc_head_trainable(True)
 
     def _run_epoch(self, optimizer, epoch: int, stage: str):
         self.model.train()
-        if hasattr(self.model, "encoder") and epoch < self.freeze_encoder_epochs:
-            self.model.encoder.freeze_early(num_blocks=5)
-        elif hasattr(self.model, "encoder"):
-            self.model.encoder.unfreeze_all()
+        if hasattr(self.model, "set_backbone_eval_mode") and stage == "stage_b":
+            self.model.set_backbone_eval_mode(
+                self.freeze_backbone_in_stage_b and self.backbone_eval_in_stage_b
+            )
+        if stage == "stage_a":
+            if hasattr(self.model, "encoder") and epoch < self.freeze_encoder_epochs:
+                self.model.encoder.freeze_early(num_blocks=5)
+            elif hasattr(self.model, "encoder"):
+                self.model.encoder.unfreeze_all()
+        elif stage != "stage_b" or not self.freeze_backbone_in_stage_b:
+            if hasattr(self.model, "encoder"):
+                self.model.encoder.unfreeze_all()
 
         total_loss = 0.0
         for batch in tqdm(self.train_loader, desc=f"{stage} epoch {epoch+1}", leave=False):
@@ -169,13 +189,10 @@ class HybridTrainer:
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            if "quantum_layer" in name or "angle_encoder" in name:
+            if any(k in name for k in ("quantum_layer", "angle_encoder", "feature_norm")):
                 quantum_params.append(param)
             elif "head" in name and "classical_head" not in name:
-                if getattr(self.model, "use_quantum", False):
-                    quantum_params.append(param)
-                else:
-                    classical_params.append(param)
+                quantum_params.append(param)
             else:
                 classical_params.append(param)
 
@@ -193,12 +210,14 @@ class HybridTrainer:
                     {
                         "params": classical_params,
                         "lr": train_cfg.get("lr_classical", 1e-4),
+                        "weight_decay": train_cfg.get("weight_decay", 1e-4),
                     }
                 )
             groups.append(
                 {
                     "params": quantum_params,
                     "lr": train_cfg.get("lr_quantum", 1e-4),
+                    "weight_decay": self.quantum_weight_decay,
                 }
             )
             return groups
@@ -255,7 +274,14 @@ class HybridTrainer:
         ckpt = torch.load(resume_path, map_location="cpu", weights_only=False)
 
         if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            self.model.load_state_dict(ckpt["model_state_dict"])
+            incompat = self.model.load_state_dict(
+                ckpt["model_state_dict"], strict=False
+            )
+            if incompat.missing_keys or incompat.unexpected_keys:
+                print(
+                    f"  checkpoint load: missing={len(incompat.missing_keys)}, "
+                    f"unexpected={len(incompat.unexpected_keys)}"
+                )
             self.best_state = ckpt.get("best_state_dict")
             self.best_score = ckpt.get("best_score", -1.0)
             self.best_stage = ckpt.get("best_stage", "stage_a")
@@ -325,7 +351,7 @@ class HybridTrainer:
                 )
 
         if self.best_state:
-            self.model.load_state_dict(self.best_state)
+            self.model.load_state_dict(self.best_state, strict=False)
             if hasattr(self.model, "set_training_stage"):
                 self.model.set_training_stage(self.best_stage)
 

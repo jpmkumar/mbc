@@ -1,0 +1,63 @@
+# Benedetti-aligned VQC config (Benedetti et al., 2019 QST 043001)
+# Use after Stage A classical training, or run full pipeline with --config this file
+
+project:
+  name: "Modality-Level Generalized Hybrid Quantum Framework"
+  seed: 42
+  experiment_suffix: "_benedetti"
+
+data:
+  root: "data/processed"
+  image_size: 224
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  num_workers: 4
+  modalities:
+    - mammo
+    - ultrasound
+    - thermo
+
+model:
+  encoder: "efficientnet_b0"
+  encoder_dim: 1280
+  projection_dim: 2048
+  transformer:
+    num_layers: 2
+    num_heads: 4
+    dim_feedforward: 512
+    dropout: 0.1
+  compression_dims: [128, 32, 8]
+  num_modality_tokens: 3
+  num_classes: 2
+  quantum:
+    n_qubits: 8
+    n_layers: 2
+    entanglement: "linear"
+    feature_norm: true      # LayerNorm before angle encoding
+    full_readout: true       # measure all qubits, not just 2
+
+training:
+  batch_size: 16
+  stage_a_epochs: 20
+  stage_b_epochs: 20         # frozen backbone VQC training
+  stage_c_epochs: 0          # skip joint fine-tune initially
+  lr_classical: 1.0e-4
+  lr_quantum: 5.0e-5         # lower LR for stable VQC optimization
+  lr_joint: 1.0e-5
+  weight_decay: 1.0e-4
+  quantum_weight_decay: 1.0e-3  # regularization on VQC head
+  freeze_encoder_epochs: 5
+  freeze_backbone_in_stage_b: true
+  backbone_eval_in_stage_b: true  # BN/Dropout stable on frozen features
+  selection_metric: balanced_accuracy
+  use_class_weights: true
+
+experiments:
+  seeds: [42]
+  qubit_sweep: [4, 6, 8]
+
+paths:
+  results: "results"
+  figures: "figures"
+  checkpoints: "results/checkpoints"

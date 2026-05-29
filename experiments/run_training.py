@@ -56,6 +56,11 @@ def main():
         action="store_true",
         help="Ignore existing _latest.pt checkpoint",
     )
+    parser.add_argument(
+        "--reset-stages",
+        action="store_true",
+        help="Reset epoch progress for selected --stage (e.g. retry Stage B with new VQC)",
+    )
     args = parser.parse_args()
 
     from src.data.dataloaders import create_dataloaders
@@ -92,6 +97,7 @@ def main():
     )
 
     model_cfg = config["model"]
+    quantum_cfg = model_cfg.get("quantum", {})
     kwargs = dict(
         num_modalities=model_cfg["num_modality_tokens"],
         num_classes=model_cfg["num_classes"],
@@ -103,16 +109,20 @@ def main():
     )
 
     use_hybrid = args.experiment in ("E3", "hybrid")
+    suffix = config.get("project", {}).get("experiment_suffix", "")
     if use_hybrid:
         model = HybridBreastCancerModel(
             **kwargs,
-            n_qubits=model_cfg["quantum"]["n_qubits"],
-            n_vqc_layers=model_cfg["quantum"]["n_layers"],
+            n_qubits=quantum_cfg.get("n_qubits", 8),
+            n_vqc_layers=quantum_cfg.get("n_layers", 2),
+            entanglement=quantum_cfg.get("entanglement", "linear"),
+            quantum_feature_norm=quantum_cfg.get("feature_norm", True),
+            quantum_full_readout=quantum_cfg.get("full_readout", True),
         )
-        exp_name = f"E3_hybrid_seed{args.seed}"
+        exp_name = f"E3_hybrid{suffix}_seed{args.seed}"
     else:
         model = ClassicalBreastCancerModel(**kwargs)
-        exp_name = f"E2_classical_seed{args.seed}"
+        exp_name = f"E2_classical{suffix}_seed{args.seed}"
 
     trainer = HybridTrainer(
         model,
@@ -146,6 +156,11 @@ def main():
         if default_best.exists():
             resume_path = str(default_best)
             print(f"Stage {args.stage} requires weights — using {resume_path}")
+
+    if args.reset_stages and stages_filter:
+        for stage_name in stages_filter:
+            trainer.stage_epochs_done[stage_name] = 0
+        print(f"Reset stage progress for: {', '.join(stages_filter)}")
 
     metrics = trainer.train(stages_filter=stages_filter, resume_path=resume_path)
     print(json.dumps(metrics, indent=2))

@@ -1,5 +1,7 @@
 """Full hybrid and classical model definitions."""
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn as nn
 
@@ -26,6 +28,9 @@ class HybridBreastCancerModel(nn.Module):
         transformer_heads: int = 4,
         n_qubits: int = 8,
         n_vqc_layers: int = 2,
+        entanglement: str = "linear",
+        quantum_feature_norm: bool = True,
+        quantum_full_readout: bool = True,
         use_modality_tokens: bool = True,
         use_transformer: bool = True,
         use_quantum: bool = True,
@@ -63,12 +68,28 @@ class HybridBreastCancerModel(nn.Module):
                 n_qubits=n_qubits,
                 n_layers=n_vqc_layers,
                 num_classes=num_classes,
+                entanglement=entanglement,
+                feature_norm=quantum_feature_norm,
+                full_readout=quantum_full_readout,
             )
         else:
             self.head = self.classical_head
 
         self.n_qubits = n_qubits
-        self._use_classical_head = not use_quantum  # stage A uses classical head for hybrid
+        self._use_classical_head = not use_quantum
+        self._backbone_frozen = False
+
+    def set_backbone_eval_mode(self, frozen: bool):
+        """Keep BatchNorm/Dropout stable when backbone is frozen (Stage B)."""
+        self._backbone_frozen = frozen
+        modules = (self.encoder, self.transformer, self.compression, self.feature_proj)
+        for module in modules:
+            if module is None:
+                continue
+            if frozen:
+                module.eval()
+            else:
+                module.train()
 
     def forward_features(
         self,
@@ -76,21 +97,24 @@ class HybridBreastCancerModel(nn.Module):
         modality_ids: torch.Tensor,
         return_attention: bool = False,
     ) -> torch.Tensor:
-        features = self.encoder(images)
+        backbone_ctx = torch.no_grad() if self._backbone_frozen else nullcontext()
 
-        if self.use_transformer and self.use_modality_tokens:
-            features = self.transformer(
-                features, modality_ids, return_attention=return_attention
-            )
-        elif self.use_transformer:
-            zero_mod = torch.zeros_like(modality_ids)
-            features = self.transformer(
-                features, zero_mod, return_attention=return_attention
-            )
-        else:
-            features = self.feature_proj(features)
+        with backbone_ctx:
+            features = self.encoder(images)
 
-        compressed = self.compression(features)
+            if self.use_transformer and self.use_modality_tokens:
+                features = self.transformer(
+                    features, modality_ids, return_attention=return_attention
+                )
+            elif self.use_transformer:
+                zero_mod = torch.zeros_like(modality_ids)
+                features = self.transformer(
+                    features, zero_mod, return_attention=return_attention
+                )
+            else:
+                features = self.feature_proj(features)
+
+            compressed = self.compression(features)
         return compressed
 
     def set_training_stage(self, stage: str):
