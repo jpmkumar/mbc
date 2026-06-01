@@ -15,6 +15,23 @@ from .feature_cache import build_feature_loader, extract_compressed_features
 from .losses import compute_class_weights
 
 
+def filter_compatible_state_dict(
+    model: nn.Module, state_dict: dict[str, torch.Tensor]
+) -> tuple[dict[str, torch.Tensor], list[str]]:
+    """Drop checkpoint keys whose tensor shapes differ from the current model."""
+    model_sd = model.state_dict()
+    filtered: dict[str, torch.Tensor] = {}
+    skipped: list[str] = []
+    for key, value in state_dict.items():
+        if key not in model_sd:
+            continue
+        if model_sd[key].shape != value.shape:
+            skipped.append(key)
+            continue
+        filtered[key] = value
+    return filtered, skipped
+
+
 class HybridTrainer:
     STAGES = ("stage_a", "stage_b", "stage_c")
 
@@ -412,19 +429,40 @@ class HybridTrainer:
         with open(self._progress_path(), "w") as f:
             json.dump(progress, f, indent=2)
 
+    def _load_state_dict_lenient(
+        self, state_dict: dict[str, torch.Tensor], label: str = "checkpoint"
+    ) -> dict[str, torch.Tensor]:
+        filtered, skipped = filter_compatible_state_dict(self.model, state_dict)
+        incompat = self.model.load_state_dict(filtered, strict=False)
+        if skipped:
+            print(f"  {label}: skipped {len(skipped)} shape-mismatch keys")
+            for key in skipped[:6]:
+                print(f"    - {key}")
+            if len(skipped) > 6:
+                print(f"    ... and {len(skipped) - 6} more")
+        if incompat.missing_keys:
+            print(
+                f"  {label}: {len(incompat.missing_keys)} keys kept at init "
+                f"(new or incompatible layers)"
+            )
+        if incompat.unexpected_keys:
+            print(f"  {label}: ignored {len(incompat.unexpected_keys)} unexpected keys")
+        return filtered
+
+    def _merge_best_state(self, state_dict: dict[str, torch.Tensor] | None) -> dict:
+        """Build a full best_state after partial load (e.g. new VQC head)."""
+        merged = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+        if state_dict:
+            filtered, _ = filter_compatible_state_dict(self.model, state_dict)
+            merged.update({k: v.cpu().clone() for k, v in filtered.items()})
+        return merged
+
     def _load_checkpoint(self, resume_path: Path):
         ckpt = torch.load(resume_path, map_location="cpu", weights_only=False)
 
         if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            incompat = self.model.load_state_dict(
-                ckpt["model_state_dict"], strict=False
-            )
-            if incompat.missing_keys or incompat.unexpected_keys:
-                print(
-                    f"  checkpoint load: missing={len(incompat.missing_keys)}, "
-                    f"unexpected={len(incompat.unexpected_keys)}"
-                )
-            self.best_state = ckpt.get("best_state_dict")
+            self._load_state_dict_lenient(ckpt["model_state_dict"], "model")
+            self.best_state = self._merge_best_state(ckpt.get("best_state_dict"))
             self.best_score = ckpt.get("best_score", -1.0)
             self.best_stage = ckpt.get("best_stage", "stage_a")
             self.total_epochs = ckpt.get("total_epochs", 0)
@@ -434,8 +472,11 @@ class HybridTrainer:
             print(f"  total_epochs={self.total_epochs}, stage progress={self.stage_epochs_done}")
             return
 
-        self.model.load_state_dict(ckpt, strict=False)
-        self.best_state = {k: v.cpu().clone() for k, v in ckpt.items()}
+        if isinstance(ckpt, dict):
+            self._load_state_dict_lenient(ckpt, "legacy weights")
+        else:
+            raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
+        self.best_state = self._merge_best_state(ckpt if isinstance(ckpt, dict) else None)
         print(f"Loaded legacy weights from {resume_path}")
 
     def train(
@@ -508,7 +549,8 @@ class HybridTrainer:
                 )
 
         if self.best_state:
-            self.model.load_state_dict(self.best_state, strict=False)
+            filtered, _ = filter_compatible_state_dict(self.model, self.best_state)
+            self.model.load_state_dict(filtered, strict=False)
             if hasattr(self.model, "set_training_stage"):
                 self.model.set_training_stage(self.best_stage)
 
