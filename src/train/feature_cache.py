@@ -13,6 +13,8 @@ def extract_compressed_features(
     loader: DataLoader,
     device: torch.device,
     desc: str = "Caching features",
+    use_amp: bool = False,
+    amp_device_type: str = "cuda",
 ) -> dict[str, torch.Tensor]:
     """Run frozen backbone once and store 8-d compressed vectors."""
     was_training = model.training
@@ -24,7 +26,8 @@ def extract_compressed_features(
     for batch in tqdm(loader, desc=desc, leave=False):
         images = batch["image"].to(device, non_blocking=True)
         mods = batch["modality_id"].to(device, non_blocking=True)
-        compressed = model.forward_features(images, mods)
+        with torch.autocast(amp_device_type, enabled=use_amp):
+            compressed = model.forward_features(images, mods)
         features.append(compressed.detach().cpu())
         labels.append(batch["label"])
         modality_ids.append(batch["modality_id"])

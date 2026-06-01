@@ -66,6 +66,7 @@ def main():
     from src.data.dataloaders import create_dataloaders
     from src.data.splits import load_splits
     from src.models.hybrid_model import ClassicalBreastCancerModel, HybridBreastCancerModel
+    from src.train.accelerator import configure_runtime, maybe_compile_model
     from src.train.seed import set_seed
     from src.train.trainer import HybridTrainer
 
@@ -75,6 +76,7 @@ def main():
         config = yaml.safe_load(f)
 
     set_seed(args.seed)
+    runtime = configure_runtime(config)
 
     use_hybrid = args.experiment in ("E3", "hybrid")
 
@@ -92,16 +94,16 @@ def main():
     splits = load_splits(str(splits_dir))
     data_cfg = config.get("data", {})
     train_cfg = config.get("training", {})
-    num_workers = data_cfg.get("num_workers", 0)
     cache_features = train_cfg.get("cache_frozen_backbone_features", True)
 
     loaders = create_dataloaders(
         splits,
         batch_size=train_cfg["batch_size"],
         image_size=data_cfg["image_size"],
-        num_workers=num_workers,
+        num_workers=runtime["num_workers"],
         modality_filter=modality_filter,
         preprocess_config=data_cfg.get("preprocessing"),
+        prefetch_factor=runtime["prefetch_factor"],
     )
     train_eval_loader = None
     if cache_features and use_hybrid:
@@ -109,10 +111,11 @@ def main():
             splits,
             batch_size=train_cfg["batch_size"],
             image_size=data_cfg["image_size"],
-            num_workers=num_workers,
+            num_workers=runtime["num_workers"],
             modality_filter=modality_filter,
             eval_train_transforms=True,
             preprocess_config=data_cfg.get("preprocessing"),
+            prefetch_factor=runtime["prefetch_factor"],
         )["train"]
 
     model_cfg = config["model"]
@@ -141,6 +144,9 @@ def main():
     else:
         model = ClassicalBreastCancerModel(**kwargs)
         exp_name = f"E2_classical{suffix}_seed{args.seed}"
+
+    if train_cfg.get("compile_model", False):
+        model = maybe_compile_model(model, enabled=True)
 
     trainer = HybridTrainer(
         model,

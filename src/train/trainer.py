@@ -12,6 +12,7 @@ from tqdm import tqdm
 from src.data.preprocessing import preprocess_cache_tag
 from src.utils.metrics import compute_metrics
 
+from .accelerator import amp_device_type, configure_runtime, maybe_compile_model
 from .feature_cache import build_feature_loader, extract_compressed_features
 from .losses import compute_class_weights
 
@@ -90,6 +91,16 @@ class HybridTrainer:
             1, int(train_cfg.get("checkpoint_interval", 1))
         )
         self.batch_size = train_cfg.get("batch_size", 16)
+
+        runtime = configure_runtime(config)
+        self.use_amp = runtime["use_amp"]
+        self.amp_device_type = amp_device_type(self.classical_device)
+        self.scaler = torch.amp.GradScaler(
+            self.amp_device_type, enabled=self.use_amp
+        )
+        self.cache_batch_size = runtime["cache_batch_size"]
+        if self.use_amp:
+            print(f"Mixed precision (AMP) enabled on {self.amp_device_type}")
 
         use_weights = train_cfg.get("use_class_weights", True)
         malignant_mult = float(train_cfg.get("malignant_weight_multiplier", 1.0))
@@ -230,16 +241,38 @@ class HybridTrainer:
 
         print("Pre-extracting frozen backbone features (one-time, ~2-5 min on GPU)...")
         train_source = self.train_eval_loader or self.train_loader
+        cache_loader = self._loader_with_batch_size(train_source, self.cache_batch_size)
+        val_cache_loader = self._loader_with_batch_size(
+            self.val_loader, self.cache_batch_size
+        )
         cached_train = extract_compressed_features(
-            self.model, train_source, self.classical_device, desc="Cache train"
+            self.model,
+            cache_loader,
+            self.classical_device,
+            desc="Cache train",
+            use_amp=self.use_amp,
+            amp_device_type=self.amp_device_type,
         )
         cached_val = extract_compressed_features(
-            self.model, self.val_loader, self.classical_device, desc="Cache val"
+            self.model,
+            val_cache_loader,
+            self.classical_device,
+            desc="Cache val",
+            use_amp=self.use_amp,
+            amp_device_type=self.amp_device_type,
         )
         cached_test = None
         if self.test_loader is not None:
+            test_cache_loader = self._loader_with_batch_size(
+                self.test_loader, self.cache_batch_size
+            )
             cached_test = extract_compressed_features(
-                self.model, self.test_loader, self.classical_device, desc="Cache test"
+                self.model,
+                test_cache_loader,
+                self.classical_device,
+                desc="Cache test",
+                use_amp=self.use_amp,
+                amp_device_type=self.amp_device_type,
             )
 
         payload = {"train": cached_train, "val": cached_val, "test": cached_test}
@@ -256,6 +289,52 @@ class HybridTrainer:
             self._feature_loaders["test"] = build_feature_loader(
                 cached_test, self.batch_size, shuffle=False
             )
+
+    def _loader_with_batch_size(
+        self, loader: DataLoader, batch_size: int, shuffle: bool = False
+    ) -> DataLoader:
+        if getattr(loader, "batch_size", None) == batch_size:
+            return loader
+        kwargs: dict = {
+            "dataset": loader.dataset,
+            "batch_size": batch_size,
+            "shuffle": shuffle,
+            "num_workers": loader.num_workers,
+            "pin_memory": loader.pin_memory,
+        }
+        if loader.num_workers > 0:
+            kwargs["prefetch_factor"] = getattr(loader, "prefetch_factor", 2)
+            kwargs["persistent_workers"] = True
+        return DataLoader(**kwargs)
+
+    def _compute_logits(self, batch, use_cache: bool, stage: str):
+        if use_cache:
+            features, labels, _mods = batch
+            labels = labels.to(self.classical_device, non_blocking=True)
+            return self.model.forward_from_features(features), labels
+
+        images = batch["image"].to(self.classical_device, non_blocking=True)
+        labels = batch["label"].to(self.classical_device, non_blocking=True)
+        modality_ids = batch["modality_id"].to(
+            self.classical_device, non_blocking=True
+        )
+
+        quantum_stage = (
+            getattr(self.model, "use_quantum", False)
+            and stage in ("stage_b", "stage_c")
+            and hasattr(self.model, "forward_from_features")
+            and not getattr(self.model, "_use_classical_head", True)
+        )
+
+        if quantum_stage and self.use_amp:
+            with torch.autocast(self.amp_device_type, enabled=True):
+                compressed = self.model.forward_features(images, modality_ids)
+            logits = self.model.forward_from_features(compressed)
+            return logits, labels
+
+        with torch.autocast(self.amp_device_type, enabled=self.use_amp):
+            logits = self.model(images, modality_ids)
+        return logits, labels
 
     def _run_epoch(self, optimizer, epoch: int, stage: str):
         self.model.train()
@@ -279,22 +358,17 @@ class HybridTrainer:
         total_loss = 0.0
 
         for batch in tqdm(loader, desc=f"{stage} epoch {epoch+1}", leave=False):
-            optimizer.zero_grad()
-            if use_cache:
-                features, labels, _mods = batch
-                labels = labels.to(self.classical_device, non_blocking=True)
-                logits = self.model.forward_from_features(features)
-            else:
-                images = batch["image"].to(self.classical_device, non_blocking=True)
-                labels = batch["label"].to(self.classical_device, non_blocking=True)
-                modality_ids = batch["modality_id"].to(
-                    self.classical_device, non_blocking=True
-                )
-                logits = self.model(images, modality_ids)
-
+            optimizer.zero_grad(set_to_none=True)
+            logits, labels = self._compute_logits(batch, use_cache, stage)
             loss = self.criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
+
+            if self.use_amp and not use_cache:
+                self.scaler.scale(loss).backward()
+                self.scaler.step(optimizer)
+                self.scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
             total_loss += loss.item()
 
         return total_loss / max(len(loader), 1)
@@ -315,8 +389,9 @@ class HybridTrainer:
             modality_ids = batch["modality_id"].to(
                 self.classical_device, non_blocking=True
             )
-            logits = self.model(images, modality_ids)
-            probs = torch.softmax(logits, dim=1)
+            with torch.autocast(self.amp_device_type, enabled=self.use_amp):
+                logits = self.model(images, modality_ids)
+            probs = torch.softmax(logits.float(), dim=1)
             preds = logits.argmax(dim=1)
 
             all_labels.extend(labels.cpu().numpy())

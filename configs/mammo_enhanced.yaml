@@ -14,6 +14,8 @@ data:
   val_ratio: 0.15
   test_ratio: 0.15
   num_workers: 2
+  auto_num_workers: true
+  prefetch_factor: 2
   modalities:
     - mammo
     - ultrasound
@@ -54,10 +56,15 @@ model:
     full_readout: true
 
 training:
-  batch_size: 16
+  batch_size: 32
   stage_a_epochs: 30
   stage_b_epochs: 20
   stage_c_epochs: 5
+  use_amp: true
+  cudnn_benchmark: true
+  allow_tf32: true
+  feature_cache_batch_size: 64
+  compile_model: false
   lr_classical: 1.0e-4
   lr_quantum: 5.0e-5
   lr_joint: 1.0e-5
@@ -69,8 +76,8 @@ training:
   cache_frozen_backbone_features: true
   classical_device: auto
   quantum_device: cpu
-  val_interval: 1
-  checkpoint_interval: 1
+  val_interval: 2
+  checkpoint_interval: 2
   selection_metric: balanced_accuracy
   use_class_weights: true
   malignant_weight_multiplier: 1.8

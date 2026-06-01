@@ -15,8 +15,14 @@ def create_dataloaders(
     modality_filter: list[str] | None = None,
     eval_train_transforms: bool = False,
     preprocess_config: dict | None = None,
+    prefetch_factor: int = 2,
 ):
     train_modality = modality_filter[0] if modality_filter and len(modality_filter) == 1 else None
+    loader_kwargs = {}
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = prefetch_factor
+        loader_kwargs["persistent_workers"] = True
+
     loaders = {}
     for split_name, manifest_path in splits.items():
         if split_name not in ("train", "val", "test"):
@@ -38,6 +44,6 @@ def create_dataloaders(
             shuffle=(split_name == "train"),
             num_workers=num_workers,
             pin_memory=torch.cuda.is_available(),
-            persistent_workers=num_workers > 0,
+            **loader_kwargs,
         )
     return loaders
