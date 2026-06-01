@@ -336,6 +336,10 @@ class HybridTrainer:
             logits = self.model(images, modality_ids)
         return logits, labels
 
+    def _compute_loss(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        # Weighted CE needs fp32 logits; AMP forward may produce fp16.
+        return self.criterion(logits.float(), labels)
+
     def _run_epoch(self, optimizer, epoch: int, stage: str):
         self.model.train()
         if hasattr(self.model, "set_backbone_eval_mode") and stage == "stage_b":
@@ -360,7 +364,7 @@ class HybridTrainer:
         for batch in tqdm(loader, desc=f"{stage} epoch {epoch+1}", leave=False):
             optimizer.zero_grad(set_to_none=True)
             logits, labels = self._compute_logits(batch, use_cache, stage)
-            loss = self.criterion(logits, labels)
+            loss = self._compute_loss(logits, labels)
 
             if self.use_amp and not use_cache:
                 self.scaler.scale(loss).backward()
