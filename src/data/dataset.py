@@ -9,6 +9,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from .constants import MODALITY_TO_ID
+from .preprocessing import preprocess_image
 
 
 class UnifiedBreastDataset(Dataset):
@@ -19,6 +20,8 @@ class UnifiedBreastDataset(Dataset):
         manifest_path: str,
         transform: Optional[Callable] = None,
         modality_filter: Optional[list[str]] = None,
+        preprocess_config: Optional[dict] = None,
+        train_modality: Optional[str] = None,
     ):
         self.manifest = pd.read_csv(manifest_path)
         if modality_filter:
@@ -26,6 +29,8 @@ class UnifiedBreastDataset(Dataset):
                 self.manifest["modality"].isin(modality_filter)
             ].reset_index(drop=True)
         self.transform = transform
+        self.preprocess_config = preprocess_config
+        self.train_modality = train_modality
         # Manifest paths are relative to data/processed
         self.root = Path(manifest_path).parent.parent / "processed"
 
@@ -35,7 +40,9 @@ class UnifiedBreastDataset(Dataset):
     def __getitem__(self, idx: int):
         row = self.manifest.iloc[idx]
         img_path = self.root / row["filepath"]
+        modality = row["modality"]
         image = Image.open(img_path).convert("RGB")
+        image = preprocess_image(image, modality, self.preprocess_config)
         if self.transform:
             image = self.transform(image)
 

@@ -101,6 +101,7 @@ def main():
         image_size=data_cfg["image_size"],
         num_workers=num_workers,
         modality_filter=modality_filter,
+        preprocess_config=data_cfg.get("preprocessing"),
     )
     train_eval_loader = None
     if cache_features and use_hybrid:
@@ -111,6 +112,7 @@ def main():
             num_workers=num_workers,
             modality_filter=modality_filter,
             eval_train_transforms=True,
+            preprocess_config=data_cfg.get("preprocessing"),
         )["train"]
 
     model_cfg = config["model"]

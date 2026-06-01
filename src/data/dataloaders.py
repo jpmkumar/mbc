@@ -14,19 +14,23 @@ def create_dataloaders(
     num_workers: int = 0,
     modality_filter: list[str] | None = None,
     eval_train_transforms: bool = False,
+    preprocess_config: dict | None = None,
 ):
+    train_modality = modality_filter[0] if modality_filter and len(modality_filter) == 1 else None
     loaders = {}
     for split_name, manifest_path in splits.items():
         if split_name not in ("train", "val", "test"):
             continue
         if split_name == "train" and not eval_train_transforms:
-            transform = get_train_transforms(image_size)
+            transform = get_train_transforms(image_size, modality=train_modality)
         else:
             transform = get_eval_transforms(image_size)
         dataset = UnifiedBreastDataset(
             manifest_path,
             transform=transform,
             modality_filter=modality_filter,
+            preprocess_config=preprocess_config,
+            train_modality=train_modality,
         )
         loaders[split_name] = DataLoader(
             dataset,

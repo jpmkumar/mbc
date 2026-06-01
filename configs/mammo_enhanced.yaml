@@ -1,8 +1,11 @@
-# Default experiment configuration — Modality-Level Hybrid Quantum Framework
+# Enhanced mammography + multi-modality preprocessing
+# Stage A: longer classical training, CLAHE, higher malignant weight
+# Stage B: Benedetti VQC on frozen preprocessed features
 
 project:
   name: "Modality-Level Generalized Hybrid Quantum Framework"
   seed: 42
+  experiment_suffix: "_enhanced"
 
 data:
   root: "data/processed"
@@ -16,7 +19,7 @@ data:
     - ultrasound
     - thermo
   preprocessing:
-    enabled: false
+    enabled: true
     mammo:
       grayscale: true
       clahe: true
@@ -25,6 +28,8 @@ data:
     ultrasound:
       grayscale: true
       clahe: true
+      clip_limit: 2.0
+      grid_size: 8
     thermo:
       grayscale: false
       clahe: false
@@ -45,31 +50,31 @@ model:
     n_qubits: 8
     n_layers: 2
     entanglement: "linear"
+    feature_norm: true
+    full_readout: true
 
 training:
   batch_size: 16
-  stage_a_epochs: 20   # classical head only
-  stage_b_epochs: 30   # VQC head (frozen backbone)
-  stage_c_epochs: 5    # joint fine-tune (reduced)
+  stage_a_epochs: 30
+  stage_b_epochs: 20
+  stage_c_epochs: 5
   lr_classical: 1.0e-4
-  lr_quantum: 1.0e-4
+  lr_quantum: 5.0e-5
   lr_joint: 1.0e-5
   weight_decay: 1.0e-4
+  quantum_weight_decay: 1.0e-3
   freeze_encoder_epochs: 5
   freeze_backbone_in_stage_b: true
-  cache_frozen_backbone_features: true  # Stage B: pre-extract 8-d features once
-  classical_device: auto                # cuda / mps / cpu
+  backbone_eval_in_stage_b: true
+  cache_frozen_backbone_features: true
+  classical_device: auto
   quantum_device: cpu
   val_interval: 1
   checkpoint_interval: 1
   selection_metric: balanced_accuracy
   use_class_weights: true
-  malignant_weight_multiplier: 1.0
+  malignant_weight_multiplier: 1.8
   eval_threshold: 0.5
-
-experiments:
-  seeds: [42, 43, 44]
-  qubit_sweep: [4, 6, 8]
 
 paths:
   results: "results"

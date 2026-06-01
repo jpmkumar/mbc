@@ -9,6 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from src.data.preprocessing import preprocess_cache_tag
 from src.utils.metrics import compute_metrics
 
 from .feature_cache import build_feature_loader, extract_compressed_features
@@ -91,8 +92,12 @@ class HybridTrainer:
         self.batch_size = train_cfg.get("batch_size", 16)
 
         use_weights = train_cfg.get("use_class_weights", True)
+        malignant_mult = float(train_cfg.get("malignant_weight_multiplier", 1.0))
         if use_weights:
-            weights = compute_class_weights(train_loader).to(self.device)
+            weights = compute_class_weights(
+                train_loader,
+                malignant_multiplier=malignant_mult,
+            ).to(self.classical_device)
             self.criterion = nn.CrossEntropyLoss(weight=weights)
         else:
             self.criterion = nn.CrossEntropyLoss()
@@ -195,14 +200,15 @@ class HybridTrainer:
             and getattr(self.model, "use_quantum", False)
         )
 
-    def _feature_cache_path(self, split: str) -> Path:
-        return self.feature_cache_dir / f"{self.experiment_name}_{split}_features.pt"
+    def _feature_cache_path(self) -> Path:
+        tag = preprocess_cache_tag(self.config.get("data", {}).get("preprocessing"))
+        return self.feature_cache_dir / f"{self.experiment_name}_{tag}_features.pt"
 
     def _prepare_feature_loaders(self, stage: str):
         if not self._should_cache_features(stage):
             return
 
-        cache_path = self._feature_cache_path("train")
+        cache_path = self._feature_cache_path()
         if cache_path.exists():
             print(f"Loading cached Stage B features from {cache_path.parent}")
             cached = torch.load(cache_path, map_location="cpu", weights_only=False)
