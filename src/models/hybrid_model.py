@@ -78,6 +78,24 @@ class HybridBreastCancerModel(nn.Module):
         self.n_qubits = n_qubits
         self._use_classical_head = not use_quantum
         self._backbone_frozen = False
+        self.classical_device = torch.device("cpu")
+        self.quantum_device = torch.device("cpu")
+
+    def set_devices(self, classical_device, quantum_device=None):
+        """Place classical backbone and quantum head on separate devices."""
+        self.classical_device = torch.device(classical_device)
+        self.quantum_device = torch.device(quantum_device or classical_device)
+        for module in (
+            self.encoder,
+            self.transformer,
+            self.compression,
+            self.feature_proj,
+            self.classical_head,
+        ):
+            if module is not None:
+                module.to(self.classical_device)
+        if self.use_quantum:
+            self.head.to(self.quantum_device)
 
     def set_backbone_eval_mode(self, frozen: bool):
         """Keep BatchNorm/Dropout stable when backbone is frozen (Stage B)."""
@@ -140,16 +158,29 @@ class HybridBreastCancerModel(nn.Module):
         for param in self.head.parameters():
             param.requires_grad = trainable
 
+    def forward_from_features(self, compressed: torch.Tensor) -> torch.Tensor:
+        """Classify pre-compressed features (Stage B feature cache path)."""
+        if self.use_quantum and self._use_classical_head:
+            return self.classical_head(compressed.to(self.classical_device))
+        if self.use_quantum:
+            logits = self.head(compressed.to(self.quantum_device))
+            return logits.to(self.classical_device)
+        return self.head(compressed.to(self.classical_device))
+
     def forward(
         self,
         images: torch.Tensor,
         modality_ids: torch.Tensor,
         return_attention: bool = False,
+        features: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if features is not None:
+            return self.forward_from_features(features)
+
+        images = images.to(self.classical_device)
+        modality_ids = modality_ids.to(self.classical_device)
         compressed = self.forward_features(images, modality_ids, return_attention)
-        if self.use_quantum and self._use_classical_head:
-            return self.classical_head(compressed)
-        return self.head(compressed)
+        return self.forward_from_features(compressed)
 
 
 class ClassicalBreastCancerModel(HybridBreastCancerModel):

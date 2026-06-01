@@ -12,7 +12,7 @@ data:
   train_ratio: 0.70
   val_ratio: 0.15
   test_ratio: 0.15
-  num_workers: 4
+  num_workers: 2
   modalities:
     - mammo
     - ultrasound
@@ -49,7 +49,12 @@ training:
   quantum_weight_decay: 1.0e-3  # regularization on VQC head
   freeze_encoder_epochs: 5
   freeze_backbone_in_stage_b: true
-  backbone_eval_in_stage_b: true  # BN/Dropout stable on frozen features
+  backbone_eval_in_stage_b: true
+  cache_frozen_backbone_features: true
+  classical_device: auto
+  quantum_device: cpu
+  val_interval: 1
+  checkpoint_interval: 1
   selection_metric: balanced_accuracy
   use_class_weights: true
 

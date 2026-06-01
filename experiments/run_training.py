@@ -76,6 +76,8 @@ def main():
 
     set_seed(args.seed)
 
+    use_hybrid = args.experiment in ("E3", "hybrid")
+
     splits_dir = ROOT / "data/splits"
     train_csv = splits_dir / "train.csv"
     if not train_csv.exists():
@@ -88,13 +90,28 @@ def main():
         )
 
     splits = load_splits(str(splits_dir))
+    data_cfg = config.get("data", {})
+    train_cfg = config.get("training", {})
+    num_workers = data_cfg.get("num_workers", 0)
+    cache_features = train_cfg.get("cache_frozen_backbone_features", True)
+
     loaders = create_dataloaders(
         splits,
-        batch_size=config["training"]["batch_size"],
-        image_size=config["data"]["image_size"],
-        num_workers=0,
+        batch_size=train_cfg["batch_size"],
+        image_size=data_cfg["image_size"],
+        num_workers=num_workers,
         modality_filter=modality_filter,
     )
+    train_eval_loader = None
+    if cache_features and use_hybrid:
+        train_eval_loader = create_dataloaders(
+            splits,
+            batch_size=train_cfg["batch_size"],
+            image_size=data_cfg["image_size"],
+            num_workers=num_workers,
+            modality_filter=modality_filter,
+            eval_train_transforms=True,
+        )["train"]
 
     model_cfg = config["model"]
     quantum_cfg = model_cfg.get("quantum", {})
@@ -108,7 +125,6 @@ def main():
         transformer_heads=model_cfg["transformer"]["num_heads"],
     )
 
-    use_hybrid = args.experiment in ("E3", "hybrid")
     suffix = config.get("project", {}).get("experiment_suffix", "")
     if use_hybrid:
         model = HybridBreastCancerModel(
@@ -131,6 +147,7 @@ def main():
         config,
         test_loader=loaders.get("test"),
         experiment_name=exp_name,
+        train_eval_loader=train_eval_loader,
     )
     if args.quick:
         trainer.stage_a_epochs = 15

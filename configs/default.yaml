@@ -39,11 +39,16 @@ training:
   stage_b_epochs: 30   # VQC head (frozen backbone)
   stage_c_epochs: 5    # joint fine-tune (reduced)
   lr_classical: 1.0e-4
-  lr_quantum: 1.0e-4   # lower — was 1e-3, caused VQC instability
+  lr_quantum: 1.0e-4
   lr_joint: 1.0e-5
   weight_decay: 1.0e-4
   freeze_encoder_epochs: 5
   freeze_backbone_in_stage_b: true
+  cache_frozen_backbone_features: true  # Stage B: pre-extract 8-d features once
+  classical_device: auto                # cuda / mps / cpu
+  quantum_device: cpu
+  val_interval: 1
+  checkpoint_interval: 1
   selection_metric: balanced_accuracy
   use_class_weights: true
 

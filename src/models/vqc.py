@@ -7,6 +7,16 @@ import torch
 import torch.nn as nn
 
 
+def _pick_qubit_device() -> str:
+    """Prefer lightning.qubit (C++ sim); fall back to default.qubit."""
+    try:
+        import pennylane_lightning  # noqa: F401
+
+        return "lightning.qubit"
+    except ImportError:
+        return "default.qubit"
+
+
 class AngleEncoder(nn.Module):
     """Map normalized classical features to [0, pi] rotation angles."""
 
@@ -17,7 +27,8 @@ class AngleEncoder(nn.Module):
 def build_vqc_layer(n_qubits: int, n_layers: int, entanglement: str = "linear"):
     """Hardware-efficient variational circuit (RY, RZ, linear CNOT)."""
 
-    dev = qml.device("default.qubit", wires=n_qubits)
+    dev_name = _pick_qubit_device()
+    dev = qml.device(dev_name, wires=n_qubits)
 
     @qml.qnode(dev, interface="torch", diff_method="backprop")
     def circuit(inputs, weights):
@@ -34,7 +45,6 @@ def build_vqc_layer(n_qubits: int, n_layers: int, entanglement: str = "linear"):
                     qml.CNOT(wires=[q, q + 1])
                 qml.CNOT(wires=[n_qubits - 1, 0])
 
-        # Full readout: all qubit Z expectations (Benedetti post-measurement layer)
         return [qml.expval(qml.PauliZ(q)) for q in range(n_qubits)]
 
     weight_shapes = {"weights": (n_layers, n_qubits, 2)}

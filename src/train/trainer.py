@@ -6,12 +6,13 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.utils.metrics import compute_metrics
 
+from .feature_cache import build_feature_loader, extract_compressed_features
 from .losses import compute_class_weights
-from .seed import set_seed
 
 
 class HybridTrainer:
@@ -26,16 +27,17 @@ class HybridTrainer:
         test_loader=None,
         device: str | None = None,
         experiment_name: str = "default",
+        train_eval_loader=None,
     ):
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
+        self.train_eval_loader = train_eval_loader
         self.config = config
-        self.device = device or self._default_device()
-        if getattr(model, "use_quantum", False):
-            self.device = "cpu"  # PennyLane default.qubit requires CPU tensors
-        self.model.to(self.device)
+        train_cfg = config.get("training", {})
+
+        self._setup_devices(device, train_cfg)
         self.experiment_name = experiment_name
         self.results_dir = Path(config.get("paths", {}).get("results", "results"))
         self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -43,8 +45,9 @@ class HybridTrainer:
             config.get("paths", {}).get("checkpoints", "results/checkpoints")
         )
         self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+        self.feature_cache_dir = self.results_dir / "feature_cache"
+        self.feature_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        train_cfg = config.get("training", {})
         self.stage_a_epochs = train_cfg.get("stage_a_epochs", 20)
         self.stage_b_epochs = train_cfg.get("stage_b_epochs", 30)
         self.stage_c_epochs = train_cfg.get("stage_c_epochs", 10)
@@ -55,12 +58,20 @@ class HybridTrainer:
         self.backbone_eval_in_stage_b = train_cfg.get(
             "backbone_eval_in_stage_b", True
         )
+        self.cache_frozen_backbone_features = train_cfg.get(
+            "cache_frozen_backbone_features", True
+        )
         self.quantum_weight_decay = train_cfg.get(
             "quantum_weight_decay", train_cfg.get("weight_decay", 1e-4)
         )
         self.selection_metric = train_cfg.get(
             "selection_metric", "balanced_accuracy"
         )
+        self.val_interval = max(1, int(train_cfg.get("val_interval", 1)))
+        self.checkpoint_interval = max(
+            1, int(train_cfg.get("checkpoint_interval", 1))
+        )
+        self.batch_size = train_cfg.get("batch_size", 16)
 
         use_weights = train_cfg.get("use_class_weights", True)
         if use_weights:
@@ -75,6 +86,37 @@ class HybridTrainer:
         self.best_stage = "stage_a"
         self.stage_epochs_done = {s: 0 for s in self.STAGES}
         self.total_epochs = 0
+        self._feature_loaders: dict[str, DataLoader] = {}
+
+    @property
+    def device(self):
+        """Primary device for labels, loss, and classical modules."""
+        return self.classical_device
+
+    def _setup_devices(self, device: str | None, train_cfg: dict):
+        requested = device or train_cfg.get("classical_device", "auto")
+        if requested == "auto":
+            classical = self._default_device()
+        else:
+            classical = requested
+
+        if getattr(self.model, "use_quantum", False):
+            self.classical_device = torch.device(classical)
+            self.quantum_device = torch.device(
+                train_cfg.get("quantum_device", "cpu")
+            )
+            if hasattr(self.model, "set_devices"):
+                self.model.set_devices(self.classical_device, self.quantum_device)
+            else:
+                self.model.to(self.classical_device)
+            print(
+                f"Hybrid devices: classical={self.classical_device}, "
+                f"quantum={self.quantum_device}"
+            )
+        else:
+            self.classical_device = torch.device(classical)
+            self.quantum_device = self.classical_device
+            self.model.to(self.classical_device)
 
     @staticmethod
     def _default_device() -> str:
@@ -109,6 +151,8 @@ class HybridTrainer:
             self.model.set_backbone_trainable(True)
             self.model.set_classical_head_trainable(True)
             self.model.set_vqc_head_trainable(False)
+            if hasattr(self.model, "set_backbone_eval_mode"):
+                self.model.set_backbone_eval_mode(False)
         elif stage == "stage_b":
             freeze_backbone = self.freeze_backbone_in_stage_b
             self.model.set_backbone_trainable(not freeze_backbone)
@@ -124,6 +168,71 @@ class HybridTrainer:
             self.model.set_backbone_trainable(True)
             self.model.set_classical_head_trainable(False)
             self.model.set_vqc_head_trainable(True)
+        self._feature_loaders.clear()
+
+    def _should_cache_features(self, stage: str) -> bool:
+        return (
+            stage == "stage_b"
+            and self.cache_frozen_backbone_features
+            and self.freeze_backbone_in_stage_b
+            and getattr(self.model, "use_quantum", False)
+        )
+
+    def _feature_cache_path(self, split: str) -> Path:
+        return self.feature_cache_dir / f"{self.experiment_name}_{split}_features.pt"
+
+    def _prepare_feature_loaders(self, stage: str):
+        if not self._should_cache_features(stage):
+            return
+
+        cache_path = self._feature_cache_path("train")
+        if cache_path.exists():
+            print(f"Loading cached Stage B features from {cache_path.parent}")
+            cached = torch.load(cache_path, map_location="cpu", weights_only=False)
+            self._feature_loaders["train"] = build_feature_loader(
+                cached["train"], self.batch_size, shuffle=True
+            )
+            self._feature_loaders["val"] = build_feature_loader(
+                cached["val"], self.batch_size, shuffle=False
+            )
+            if cached.get("test") is not None:
+                self._feature_loaders["test"] = build_feature_loader(
+                    cached["test"], self.batch_size, shuffle=False
+                )
+            print(
+                f"  train={len(cached['train']['features'])} "
+                f"val={len(cached['val']['features'])} samples"
+            )
+            return
+
+        print("Pre-extracting frozen backbone features (one-time, ~2-5 min on GPU)...")
+        train_source = self.train_eval_loader or self.train_loader
+        cached_train = extract_compressed_features(
+            self.model, train_source, self.classical_device, desc="Cache train"
+        )
+        cached_val = extract_compressed_features(
+            self.model, self.val_loader, self.classical_device, desc="Cache val"
+        )
+        cached_test = None
+        if self.test_loader is not None:
+            cached_test = extract_compressed_features(
+                self.model, self.test_loader, self.classical_device, desc="Cache test"
+            )
+
+        payload = {"train": cached_train, "val": cached_val, "test": cached_test}
+        torch.save(payload, cache_path)
+        print(f"Saved feature cache to {cache_path}")
+
+        self._feature_loaders["train"] = build_feature_loader(
+            cached_train, self.batch_size, shuffle=True
+        )
+        self._feature_loaders["val"] = build_feature_loader(
+            cached_val, self.batch_size, shuffle=False
+        )
+        if cached_test is not None:
+            self._feature_loaders["test"] = build_feature_loader(
+                cached_test, self.batch_size, shuffle=False
+            )
 
     def _run_epoch(self, optimizer, epoch: int, stage: str):
         self.model.train()
@@ -140,32 +249,65 @@ class HybridTrainer:
             if hasattr(self.model, "encoder"):
                 self.model.encoder.unfreeze_all()
 
+        use_cache = stage in self._feature_loaders
+        loader = self._feature_loaders.get("train", self.train_loader)
         total_loss = 0.0
-        for batch in tqdm(self.train_loader, desc=f"{stage} epoch {epoch+1}", leave=False):
-            images = batch["image"].to(self.device)
-            labels = batch["label"].to(self.device)
-            modality_ids = batch["modality_id"].to(self.device)
 
+        for batch in tqdm(loader, desc=f"{stage} epoch {epoch+1}", leave=False):
             optimizer.zero_grad()
-            logits = self.model(images, modality_ids)
+            if use_cache:
+                features, labels, _mods = batch
+                labels = labels.to(self.classical_device, non_blocking=True)
+                logits = self.model.forward_from_features(features)
+            else:
+                images = batch["image"].to(self.classical_device, non_blocking=True)
+                labels = batch["label"].to(self.classical_device, non_blocking=True)
+                modality_ids = batch["modality_id"].to(
+                    self.classical_device, non_blocking=True
+                )
+                logits = self.model(images, modality_ids)
+
             loss = self.criterion(logits, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
 
-        return total_loss / max(len(self.train_loader), 1)
+        return total_loss / max(len(loader), 1)
 
     @torch.no_grad()
-    def evaluate(self, loader=None) -> dict:
+    def evaluate(self, loader=None, split: str | None = None) -> dict:
+        if split and split in self._feature_loaders:
+            loader = self._feature_loaders[split]
+            return self._evaluate_cached(loader)
+
         loader = loader or self.val_loader
         self.model.eval()
         all_labels, all_preds, all_probs = [], [], []
 
         for batch in loader:
-            images = batch["image"].to(self.device)
-            labels = batch["label"].to(self.device)
-            modality_ids = batch["modality_id"].to(self.device)
+            images = batch["image"].to(self.classical_device, non_blocking=True)
+            labels = batch["label"].to(self.classical_device, non_blocking=True)
+            modality_ids = batch["modality_id"].to(
+                self.classical_device, non_blocking=True
+            )
             logits = self.model(images, modality_ids)
+            probs = torch.softmax(logits, dim=1)
+            preds = logits.argmax(dim=1)
+
+            all_labels.extend(labels.cpu().numpy())
+            all_preds.extend(preds.cpu().numpy())
+            all_probs.extend(probs[:, 1].cpu().numpy())
+
+        return compute_metrics(all_labels, all_preds, all_probs)
+
+    @torch.no_grad()
+    def _evaluate_cached(self, loader: DataLoader) -> dict:
+        self.model.eval()
+        all_labels, all_preds, all_probs = [], [], []
+
+        for features, labels, _mods in loader:
+            labels = labels.to(self.classical_device, non_blocking=True)
+            logits = self.model.forward_from_features(features)
             probs = torch.softmax(logits, dim=1)
             preds = logits.argmax(dim=1)
 
@@ -292,8 +434,7 @@ class HybridTrainer:
             print(f"  total_epochs={self.total_epochs}, stage progress={self.stage_epochs_done}")
             return
 
-        # Legacy checkpoint: weights only
-        self.model.load_state_dict(ckpt)
+        self.model.load_state_dict(ckpt, strict=False)
         self.best_state = {k: v.cpu().clone() for k, v in ckpt.items()}
         print(f"Loaded legacy weights from {resume_path}")
 
@@ -304,8 +445,6 @@ class HybridTrainer:
     ) -> dict:
         if resume_path:
             self._load_checkpoint(Path(resume_path))
-        elif self._latest_ckpt_path().exists() and stages_filter is None:
-            pass  # fresh run
 
         stages = self._build_stage_plan(stages_filter)
         if not stages:
@@ -319,6 +458,7 @@ class HybridTrainer:
                 continue
 
             self._configure_stage(stage_name)
+            self._prepare_feature_loaders(stage_name)
             param_groups = self._get_param_groups(stage_name)
             optimizer = torch.optim.AdamW(
                 param_groups,
@@ -327,27 +467,44 @@ class HybridTrainer:
 
             for epoch in range(already_done, n_epochs):
                 loss = self._run_epoch(optimizer, self.total_epochs, stage_name)
-                val_metrics = self.evaluate()
-                self.history["train_loss"].append(loss)
-                self.history["val_metrics"].append(
-                    {k: v for k, v in val_metrics.items() if k not in ("labels", "preds", "probs", "roc")}
-                )
+                epoch_num = epoch + 1
+                val_metrics = None
 
-                score = self._score(val_metrics)
-                if score > self.best_score:
-                    self.best_score = score
-                    self.best_stage = stage_name
-                    self.best_state = {
-                        k: v.cpu().clone() for k, v in self.model.state_dict().items()
-                    }
+                if epoch_num % self.val_interval == 0 or epoch_num == n_epochs:
+                    val_metrics = self.evaluate(split="val" if self._feature_loaders else None)
+                    self.history["train_loss"].append(loss)
+                    self.history["val_metrics"].append(
+                        {
+                            k: v
+                            for k, v in val_metrics.items()
+                            if k not in ("labels", "preds", "probs", "roc")
+                        }
+                    )
+
+                    score = self._score(val_metrics)
+                    if score > self.best_score:
+                        self.best_score = score
+                        self.best_stage = stage_name
+                        self.best_state = {
+                            k: v.cpu().clone()
+                            for k, v in self.model.state_dict().items()
+                        }
 
                 self.total_epochs += 1
-                self.stage_epochs_done[stage_name] = epoch + 1
-                self._save_checkpoint(stage_name)
+                self.stage_epochs_done[stage_name] = epoch_num
+
+                if epoch_num % self.checkpoint_interval == 0 or epoch_num == n_epochs:
+                    self._save_checkpoint(stage_name)
+
+                metric_str = ""
+                if val_metrics:
+                    metric_str = (
+                        f"val {self.selection_metric}="
+                        f"{val_metrics.get(self.selection_metric, 0):.3f} | "
+                    )
                 print(
-                    f"{stage_name} epoch {epoch+1}/{n_epochs} | "
-                    f"val {self.selection_metric}={val_metrics.get(self.selection_metric, 0):.3f} | "
-                    f"best={self.best_score:.3f}"
+                    f"{stage_name} epoch {epoch_num}/{n_epochs} | "
+                    f"loss={loss:.4f} | {metric_str}best={self.best_score:.3f}"
                 )
 
         if self.best_state:
@@ -355,9 +512,16 @@ class HybridTrainer:
             if hasattr(self.model, "set_training_stage"):
                 self.model.set_training_stage(self.best_stage)
 
-        eval_loader = self.test_loader or self.val_loader
-        split_name = "test" if self.test_loader is not None else "val"
-        final_metrics = self.evaluate(eval_loader)
+        if self._feature_loaders.get("test"):
+            final_metrics = self.evaluate(split="test")
+            split_name = "test"
+        elif self.test_loader is not None:
+            final_metrics = self.evaluate(self.test_loader)
+            split_name = "test"
+        else:
+            final_metrics = self.evaluate(split="val" if self._feature_loaders else None)
+            split_name = "val"
+
         final_metrics["train_time_s"] = time.time() - t0
         final_metrics["eval_split"] = split_name
         final_metrics["selection_metric"] = self.selection_metric
