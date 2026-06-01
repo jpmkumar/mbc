@@ -17,7 +17,7 @@ Example: Stage B alone ≈ **3,340 forward passes** through EfficientNet @ 224²
 
 1. **Split devices** — classical backbone on GPU/MPS; VQC head on CPU only  
 2. **Feature cache (Stage B)** — extract 8-d compressed features once; train VQC on tensors  
-3. **`lightning.qubit`** — faster C++ PennyLane simulator (auto-fallback)  
+3. **`lightning.qubit` + `adjoint`** — faster C++ PennyLane simulator (auto-fallback to `default.qubit` + `backprop`)  
 4. **`num_workers` from config** — parallel image loading (Colab: use `2`, not `4`)  
 5. **Optional `val_interval` / `checkpoint_interval`** — skip some val/checkpoint epochs  
 

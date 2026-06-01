@@ -7,16 +7,6 @@ import torch
 import torch.nn as nn
 
 
-def _pick_qubit_device() -> str:
-    """Prefer lightning.qubit (C++ sim); fall back to default.qubit."""
-    try:
-        import pennylane_lightning  # noqa: F401
-
-        return "lightning.qubit"
-    except ImportError:
-        return "default.qubit"
-
-
 class AngleEncoder(nn.Module):
     """Map normalized classical features to [0, pi] rotation angles."""
 
@@ -24,31 +14,66 @@ class AngleEncoder(nn.Module):
         return torch.sigmoid(x) * math.pi
 
 
+def _circuit_definition(
+    inputs,
+    weights,
+    n_qubits: int,
+    n_layers: int,
+    entanglement: str,
+):
+    qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
+    for layer in range(n_layers):
+        for q in range(n_qubits):
+            qml.RY(weights[layer, q, 0], wires=q)
+            qml.RZ(weights[layer, q, 1], wires=q)
+        if entanglement == "linear":
+            for q in range(n_qubits - 1):
+                qml.CNOT(wires=[q, q + 1])
+        elif entanglement == "circular":
+            for q in range(n_qubits - 1):
+                qml.CNOT(wires=[q, q + 1])
+            qml.CNOT(wires=[n_qubits - 1, 0])
+    return [qml.expval(qml.PauliZ(q)) for q in range(n_qubits)]
+
+
 def build_vqc_layer(n_qubits: int, n_layers: int, entanglement: str = "linear"):
     """Hardware-efficient variational circuit (RY, RZ, linear CNOT)."""
 
-    dev_name = _pick_qubit_device()
-    dev = qml.device(dev_name, wires=n_qubits)
-
-    @qml.qnode(dev, interface="torch", diff_method="backprop")
-    def circuit(inputs, weights):
-        qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
-        for layer in range(n_layers):
-            for q in range(n_qubits):
-                qml.RY(weights[layer, q, 0], wires=q)
-                qml.RZ(weights[layer, q, 1], wires=q)
-            if entanglement == "linear":
-                for q in range(n_qubits - 1):
-                    qml.CNOT(wires=[q, q + 1])
-            elif entanglement == "circular":
-                for q in range(n_qubits - 1):
-                    qml.CNOT(wires=[q, q + 1])
-                qml.CNOT(wires=[n_qubits - 1, 0])
-
-        return [qml.expval(qml.PauliZ(q)) for q in range(n_qubits)]
-
     weight_shapes = {"weights": (n_layers, n_qubits, 2)}
-    return qml.qnn.TorchLayer(circuit, weight_shapes)
+    attempts: list[tuple[str, str]] = []
+
+    try:
+        import pennylane_lightning  # noqa: F401
+
+        # lightning.qubit does not support backprop; adjoint is the fast path
+        attempts.append(("lightning.qubit", "adjoint"))
+    except ImportError:
+        pass
+
+    attempts.append(("default.qubit", "backprop"))
+
+    last_error: Exception | None = None
+    for dev_name, diff_method in attempts:
+        try:
+            dev = qml.device(dev_name, wires=n_qubits)
+
+            @qml.qnode(dev, interface="torch", diff_method=diff_method)
+            def circuit(inputs, weights):
+                return _circuit_definition(
+                    inputs, weights, n_qubits, n_layers, entanglement
+                )
+
+            layer = qml.qnn.TorchLayer(circuit, weight_shapes)
+            print(f"VQC backend: {dev_name} ({diff_method})")
+            return layer
+        except Exception as exc:
+            last_error = exc
+            continue
+
+    raise RuntimeError(
+        "Could not initialize a PennyLane VQC backend. "
+        "Install pennylane-lightning or use default.qubit."
+    ) from last_error
 
 
 class VQCHead(nn.Module):
