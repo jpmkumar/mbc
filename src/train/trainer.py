@@ -266,8 +266,10 @@ class HybridTrainer:
             if hasattr(self.model, "encoder"):
                 self.model.encoder.unfreeze_all()
 
-        use_cache = stage in self._feature_loaders
-        loader = self._feature_loaders.get("train", self.train_loader)
+        use_cache = "train" in self._feature_loaders
+        loader = (
+            self._feature_loaders["train"] if use_cache else self.train_loader
+        )
         total_loss = 0.0
 
         for batch in tqdm(loader, desc=f"{stage} epoch {epoch+1}", leave=False):
