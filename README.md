@@ -1,77 +1,66 @@
 # Modality-Level Generalized Hybrid Quantum Framework for Breast Cancer Classification
 
-Unified cross-modality breast cancer classification using EfficientNet-B0, Transformer-based modality-invariant learning, and a variational quantum circuit (VQC) head with multi-method explainability (SHAP, Grad-CAM, Attention).
+Unified cross-modality breast cancer classification using EfficientNet-B0, Transformer-based modality-invariant learning, and an optional variational quantum circuit (VQC) head with multi-method explainability.
+
+**Publication package:** [`publication/README.md`](publication/README.md) | **Paper PDF:** `make -C paper pdf`
+
+## Primary result (CBIS-DDSM mammography)
+
+| Metric | Enhanced Stage A |
+|--------|------------------|
+| Balanced accuracy | **70.1%** |
+| Malignant recall | **84.7%** |
+| AUC | **0.763** |
+| Test set | n=445 |
 
 ## Quick Start
 
 ```bash
-# 1. Create virtual environment and install dependencies
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Generate synthetic data (or place real data in data/processed/)
-python data/download/generate_synthetic.py --samples 50
+# Data: CBIS-DDSM → data/processed/mammo/
 python data/download/setup_datasets.py
 
-# 3. Train hybrid model (quick mode for validation)
-python experiments/run_training.py --experiment hybrid --quick
+# Train enhanced pipeline (Colab: see GITHUB.md)
+python experiments/run_training.py \
+  --config configs/mammo_enhanced.yaml \
+  --experiment hybrid --modality mammo --stage all
 
-# 4. Run experiment matrix
-python experiments/run_experiments.py --quick
-
-# 5. Generate XAI outputs and figures
-python experiments/run_xai.py
-python experiments/generate_figures.py
-python experiments/generate_vqc_diagram.py
+# Publication figures + LaTeX tables
+python scripts/generate_publication.py
+make -C paper pdf
 ```
 
 ## Project Structure
 
 ```
-configs/           Experiment YAML configs
-data/
-  download/        Dataset scripts and synthetic generator
-  processed/       Images organized by modality/label
-  splits/          Train/val/test CSV manifests
-src/
-  data/            Loaders, transforms, splits
-  models/          Encoder, transformer, VQC, hybrid model
-  train/           Two-stage training loop
-  eval/            Metrics and experiment matrix
-  xai/             Grad-CAM, attention, SHAP
-experiments/       Runnable scripts
-results/           Metrics JSON and checkpoints
-figures/           Paper-ready figures
-paper/             IEEE Access manuscript (LaTeX)
+configs/              YAML configs (default, mammo_enhanced, benedetti_vqc)
+data/download/        CBIS-DDSM, BUSI download scripts
+src/                  Models, training, data pipeline
+experiments/          run_training.py, generate_figures.py
+publication/          Metrics JSON, tables, publication guide
+figures/              Paper-ready PNG figures (300 DPI)
+paper/                IEEE Access LaTeX manuscript
+scripts/              analyze_results, generate_publication
 ```
-
-## Target Venue
-
-**Primary:** [IEEE Access](https://ieeeaccess.ieee.org/) — see [`paper/VENUE.md`](paper/VENUE.md)
 
 ## Datasets
 
-| Modality | Dataset | Location |
-|----------|---------|----------|
-| Mammography | CBIS-DDSM | TCIA (registration required) |
-| Ultrasound | BUSI | Kaggle |
-| Thermography | Breast Thermography DB | KCloud |
+| Modality | Dataset | Status in repo |
+|----------|---------|----------------|
+| Mammography | [CBIS-DDSM](https://doi.org/10.7937/K9/TCIA.2016.7O02S9CY) | **Real (~2966 ROIs)** |
+| Ultrasound | [BUSI](https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset) | Synthetic placeholder |
+| Thermography | Kaggle thermo DB | Synthetic placeholder |
 
-Run `python data/download/setup_datasets.py --instructions-only` for download guide.
-
-**Data protocol:** 70/15/15 patient-level stratified split; benign=0, malignant=1; 224×224 RGB input.
+See [`DATA_SCALE.md`](DATA_SCALE.md) for scale comparison with 100k+ image papers.
 
 ## Architecture
 
-See [`initial_paper_architecture.png`](initial_paper_architecture.png):
-
-Input → Modality Token → EfficientNet-B0 → Transformer → Compression (2048→128→32→8) → Angle Encoding → VQC → Benign/Malignant → XAI
-
-## Prior Work
-
-Built on EQML pilot study (`/Users/muthu/ResTest/pilot_study/`) validating hybrid MLP+VQC on WBCD tabular data (~93–95% accuracy, 4–8 qubit sweep).
+EfficientNet-B0 → Modality Transformer → Compression (8-D) → Classical head (Stage A) or VQC head (Stage B)
 
 ## Paper
 
-Manuscript draft: [`paper/main.tex`](paper/main.tex)
+- Manuscript: [`paper/main.tex`](paper/main.tex)
+- Checklist: [`paper/SUBMISSION_CHECKLIST.md`](paper/SUBMISSION_CHECKLIST.md)
+- GitHub: https://github.com/jpmkumar/mbc

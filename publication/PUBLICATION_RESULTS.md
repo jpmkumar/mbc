@@ -1,6 +1,6 @@
 # Publication Results Summary
 
-Auto-generated from `results/publication_metrics.json`. Re-run: `python scripts/generate_publication.py`
+Auto-generated from `publication/publication_metrics.json`. Re-run: `python scripts/generate_publication.py`
 
 ## Primary result (recommended for paper)
 

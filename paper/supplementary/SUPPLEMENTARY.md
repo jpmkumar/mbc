@@ -1,25 +1,30 @@
 # Supplementary Material — Hyperparameters and Pilot Study Bridge
 
-## Training Hyperparameters
+## Training Hyperparameters (enhanced mammography — primary result)
 
 | Parameter | Value |
 |-----------|-------|
+| Config | `configs/mammo_enhanced.yaml` |
 | Image size | 224 × 224 |
-| Batch size | 16 |
-| Stage A epochs | 20 (classical head) |
-| Stage B epochs | 30 (VQC head) |
-| Stage C epochs | 10 (joint fine-tune) |
+| Preprocessing | Grayscale + CLAHE (clip 2.0) |
+| Batch size | 32 (AMP enabled) |
+| Stage A epochs | 30 |
+| Stage B epochs | 20 |
+| Stage C epochs | 5 |
 | LR classical | 1e-4 |
-| LR quantum | 1e-3 |
-| LR joint | 1e-5 |
-| Optimizer | AdamW |
-| Weight decay | 1e-4 |
-| Transformer layers | 2 |
-| Transformer heads | 4 |
-| Compression | 2048 → 128 → 32 → 8 |
-| VQC qubits | 4 / 6 / 8 (ablation) |
-| VQC layers | 2 |
-| Entanglement | Linear CNOT chain |
+| LR quantum | 5e-5 |
+| Malignant weight multiplier | 1.8 |
+| Selection metric | Balanced accuracy |
+| Checkpoint | `E3_hybrid_enhanced_seed42` |
+
+## Training Hyperparameters (initial pipeline)
+
+| Parameter | Value |
+|-----------|-------|
+| Batch size | 16 |
+| Stage A epochs | 20 |
+| Stage B epochs | 30 |
+| LR quantum | 1e-4 |
 
 ## Data Splits
 

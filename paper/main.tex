@@ -13,7 +13,7 @@
 \title{Modality-Level Generalized Hybrid Quantum Framework for Breast Cancer Classification}
 
 \author{
-\IEEEauthorblockN{Author Name}
+\IEEEauthorblockN{Author Name(s) TBD}
 \IEEEauthorblockA{Department of Computer Science\\
 University Name\\
 Email: author@university.edu}
@@ -22,11 +22,11 @@ Email: author@university.edu}
 \maketitle
 
 \begin{abstract}
-Breast cancer diagnosis relies on heterogeneous imaging modalities---mammography, ultrasound, and thermography---yet most deep learning systems require paired multimodal datasets that are scarce in clinical practice. We propose a Modality-Level Generalized Hybrid Quantum Framework that learns unified benign/malignant patterns across modalities without patient-level multimodal pairing. The pipeline combines modality token embedding, EfficientNet-B0 local feature extraction, a Transformer encoder for modality-invariant representation learning, feature compression to eight dimensions, angle-encoded variational quantum circuit (VQC) classification, and multi-method explainability (SHAP, Grad-CAM, and attention maps). Evaluated on publicly available breast imaging datasets with leave-one-modality-out generalization, the hybrid framework achieves competitive classification performance relative to unified classical baselines while providing clinically interpretable attributions. A prior tabular EQML pilot study validated VQC feasibility on the Wisconsin Breast Cancer Diagnostic dataset ($\sim$93--95\% accuracy); this work extends the hybrid head to multi-modality medical imaging. Results support the feasibility of quantum-enhanced, explainable, cross-modality breast cancer classification for single-modality clinical workflows.
+Breast cancer diagnosis relies on heterogeneous imaging modalities---mammography, ultrasound, and thermography---yet most deep learning systems require paired multimodal datasets that are scarce in clinical practice. We propose a Modality-Level Generalized Hybrid Quantum Framework that learns unified benign/malignant patterns across modalities without patient-level multimodal pairing. The pipeline combines modality token embedding, EfficientNet-B0 feature extraction, a Transformer encoder, compression to eight dimensions, and a two-stage hybrid classifier: a classical head (Stage~A) followed by an optional variational quantum circuit (VQC) head (Stage~B) with angle encoding and hardware-efficient entanglement~\cite{benedetti2019vqc}. On CBIS-DDSM mammography ($n=2{,}966$ ROI images; test $n=445$), enhanced preprocessing (CLAHE, grayscale) and class-weighted Stage~A training achieve \textbf{70.1\% balanced accuracy}, \textbf{84.7\% malignant recall}, and \textbf{0.763 AUC}---outperforming the initial pipeline (61.8\%) and Benedetti-aligned VQC Stage~B (69.0\%). A prior tabular EQML pilot on the Wisconsin Breast Cancer Diagnostic dataset reached $\sim$97\% SVM accuracy, highlighting the greater difficulty of mammography ROI classification. Multi-method explainability (Grad-CAM, attention, SHAP) supports clinical interpretability. Code and reproduction scripts are publicly available.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Breast cancer classification, quantum machine learning, variational quantum circuit, multimodal imaging, explainable AI, transformer, EfficientNet
+Breast cancer classification, quantum machine learning, variational quantum circuit, multimodal imaging, explainable AI, transformer, EfficientNet, CBIS-DDSM
 \end{IEEEkeywords}
 
 \section{Introduction}
@@ -38,8 +38,9 @@ We address this gap with a unified learning framework that: (1) accepts any sing
 \begin{itemize}
     \item Unified cross-modality breast cancer learning without paired multimodal data
     \item Transformer-based modality-invariant representation learning with $[$MAMMO$]$, $[$ULTRA$]$, $[$THERMO$]$ tokens
-    \item Hybrid classical--quantum classification using 4--8 qubit VQC with RY/RZ rotations and CNOT entanglement
-    \item Explainable AI integration: SHAP feature/gate attribution, Grad-CAM, and Transformer attention maps
+    \item Two-stage hybrid training with Benedetti-aligned 8-qubit VQC (LayerNorm, full readout)~\cite{benedetti2019vqc}
+    \item CBIS-DDSM mammography evaluation with enhanced preprocessing reaching 70.1\% balanced accuracy
+    \item Explainable AI integration: SHAP, Grad-CAM, and Transformer attention maps
 \end{itemize}
 
 \section{Related Work}
@@ -47,16 +48,16 @@ We address this gap with a unified learning framework that: (1) accepts any sing
 
 \textbf{Cross-modality learning.} Unified encoders and domain adaptation reduce modality gap yet often assume paired or aligned data---unrealistic in low-resource settings.
 
-\textbf{Hybrid quantum ML.} Quantum feature maps and VQCs~\cite{schuld2019quantum,havlicek2019supervised} enable non-linear decision boundaries in low-dimensional encodings. Transfer learning with frozen classical extractors~\cite{mari2020transfer} improves VQC trainability.
+\textbf{Hybrid quantum ML.} Quantum feature maps and VQCs~\cite{schuld2019quantum,havlicek2019supervised,benedetti2019vqc} enable non-linear decision boundaries in low-dimensional encodings. Transfer learning with frozen classical extractors~\cite{mari2020transfer} improves VQC trainability.
 
 \textbf{Explainable medical AI.} Grad-CAM~\cite{selvaraju2017gradcam} and SHAP~\cite{lundberg2017shap} provide complementary global and local explanations essential for clinical adoption.
 
 \section{Proposed Method}
-Fig.~\ref{fig:arch} illustrates the pipeline. An input image from any supported modality receives a learnable modality token, passes through EfficientNet-B0~\cite{tan2019efficientnet} for local feature extraction, and enters a Transformer encoder for modality-invariant representation learning. A compression MLP ($2048 \rightarrow 128 \rightarrow 32 \rightarrow 8$) produces angles for quantum encoding. The VQC applies RY/RZ parameterized rotations with linear CNOT entanglement across 4--8 qubits; expectation values feed a binary classifier (benign/malignant).
+Fig.~\ref{fig:arch} illustrates the pipeline. An input image from any supported modality receives a learnable modality token, passes through EfficientNet-B0~\cite{tan2019efficientnet} for local feature extraction, and enters a Transformer encoder for modality-invariant representation learning. A compression MLP ($2048 \rightarrow 128 \rightarrow 32 \rightarrow 8$) feeds either a classical linear head (Stage~A) or a VQC head (Stage~B).
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig1_architecture.png}
+\includegraphics[width=\linewidth]{fig1_architecture.png}
 \caption{Modality-Level Generalized Hybrid Quantum Framework architecture.}
 \label{fig:arch}
 \end{figure}
@@ -65,70 +66,90 @@ Fig.~\ref{fig:arch} illustrates the pipeline. An input image from any supported 
 Learnable embeddings $\mathbf{e}_m \in \mathbb{R}^d$ for $m \in \{\text{mammo}, \text{ultra}, \text{thermo}\}$ are prepended to projected EfficientNet features, enabling the Transformer to condition on modality while learning shared representations.
 
 \subsection{Variational Quantum Circuit}
-Angle encoding maps compressed features $\mathbf{x} \in \mathbb{R}^n$ to qubit rotations: $R_Y(x_i)$ on qubit $i$. Variational layers alternate rotation blocks with CNOT entanglement. Measurement of $\langle Z_0 \rangle, \langle Z_1 \rangle$ yields classical logits via a linear head.
+Following Benedetti et al.~\cite{benedetti2019vqc}, compressed features undergo LayerNorm, sigmoid angle encoding to $[0,\pi]$, and a hardware-efficient ansatz (RY/RZ rotations with linear CNOT entanglement). Full Pauli-$Z$ readout on eight qubits feeds a classical linear classifier.
 
 \subsection{Training Strategy}
-Following EQML pilot findings~\cite{eqml_pilot2025}, we use two-stage training: (A) classical backbone + compression with linear head; (B) VQC head with differential learning rates; (C) optional joint fine-tuning.
+Fig.~\ref{fig:stages} summarizes the protocol from EQML pilot findings~\cite{eqml_pilot2025}: (A) classical backbone + compression with linear head; (B) frozen backbone, VQC head only; (C) optional joint fine-tuning. GPU mixed-precision accelerates Stage~A; feature caching accelerates Stage~B.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\linewidth]{fig_training_stages.png}
+\caption{Two-stage hybrid training: Stage~A (classical), Stage~B (VQC), optional Stage~C (joint).}
+\label{fig:stages}
+\end{figure}
 
 \section{Experimental Setup}
-\textbf{Datasets.} CBIS-DDSM (mammography), BUSI (ultrasound), and breast thermography databases. Images resized to $224 \times 224$; 70/15/15 patient-level stratified splits.
+\textbf{Datasets.} Primary results use CBIS-DDSM mammography~\cite{lee2017cbis} ($n=2{,}966$ ROI images; Table~\ref{tab:dataset}). Ultrasound (BUSI) and thermography experiments use synthetic placeholders pending full dataset download; cross-modality generalization is future work.
 
-\textbf{Baselines.} Per-modality EfficientNet-B0; unified classical model (E2); full hybrid model (E3).
+\textbf{Preprocessing.} Enhanced Stage~A/B: grayscale conversion, CLAHE contrast enhancement ($clip=2.0$), resize to $224\times224$, ImageNet normalization. Train-time augmentation: horizontal flip, $\pm5°$ rotation.
 
-\textbf{Metrics.} Accuracy, precision, recall, F1, AUC-ROC; mean $\pm$ std over three seeds.
+\textbf{Baselines.} Initial Stage~A (default config); Benedetti VQC Stage~B; enhanced Stage~A/B (\texttt{mammo\_enhanced.yaml}: CLAHE, malignant class weight $\times 1.8$, 30 Stage~A epochs).
 
-\textbf{Hardware.} PyTorch + PennyLane \texttt{lightning.qubit} simulator (adjoint); classical modules on GPU, VQC on CPU; mixed-precision training for Stage~A.
+\textbf{Metrics.} Accuracy, balanced accuracy, precision, recall, F1, AUC-ROC on held-out test split ($n=445$).
+
+\textbf{Hardware.} Google Colab T4 GPU; PyTorch + PennyLane \texttt{lightning.qubit} (adjoint); classical modules on GPU, VQC on CPU.
 
 \section{Results}
-We report mammography results on CBIS-DDSM ($n=2{,}966$ ROI images; 70/15/15 stratified split; test $n=445$). Table~\ref{tab:mammo} compares baseline and enhanced pipelines. Enhanced Stage~A applies grayscale conversion, CLAHE contrast enhancement, malignant class re-weighting, and 30-epoch classical-head training. Fig.~\ref{fig:metrics} and Fig.~\ref{fig:confusion} summarize test metrics and confusion matrices.
+Table~\ref{tab:mammo} compares all mammography configurations. Fig.~\ref{fig:metrics}--\ref{fig:confusion} visualize test metrics and confusion matrices.
 
 \input{../publication/tables/publication_tables.tex}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig_mammo_metrics_comparison.png}
-\caption{CBIS-DDSM test-set comparison: (a) balanced accuracy, recall, and precision; (b) F1 and AUC across training configurations.}
+\includegraphics[width=\linewidth]{fig_mammo_metrics_comparison.png}
+\caption{CBIS-DDSM test-set comparison ($n=445$): (a) balanced accuracy, recall, precision; (b) F1 and AUC.}
 \label{fig:metrics}
 \end{figure}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig_confusion_matrices.png}
-\caption{Confusion matrices on CBIS-DDSM test set ($n=445$): (a) enhanced Stage~A (recommended); (b) enhanced Stage~B VQC.}
+\includegraphics[width=\linewidth]{fig_confusion_matrices.png}
+\caption{Test confusion matrices: (a) enhanced Stage~A (recommended); (b) enhanced Stage~B VQC.}
 \label{fig:confusion}
 \end{figure}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=0.85\linewidth]{figures/fig_dataset_splits.png}
-\caption{CBIS-DDSM mammography dataset split sizes.}
+\includegraphics[width=0.85\linewidth]{fig_dataset_splits.png}
+\caption{CBIS-DDSM dataset split sizes.}
 \label{fig:dataset}
 \end{figure}
 
-Enhanced Stage~A achieved \textbf{70.1\% balanced accuracy}, \textbf{84.7\% malignant recall}, and \textbf{0.763 AUC} on the held-out test set---an absolute gain of 8.3 points in balanced accuracy over the initial Stage~A baseline (61.8\%). Benedetti-aligned VQC Stage~B (69.0\% balanced accuracy, 59.9\% recall) did not surpass the classical head; we therefore recommend Stage~A enhanced for deployment and report VQC as an ablation. Table~\ref{tab:pilot} contrasts the prior WBCD tabular pilot ($\sim$97\% SVM accuracy) with imaging results, emphasizing the increased difficulty of mammography ROI classification.
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.85\linewidth]{fig_pilot_vs_imaging.png}
+\caption{WBCD tabular pilot vs CBIS-DDSM mammography (different tasks).}
+\label{fig:pilot}
+\end{figure}
 
-Leave-one-modality-out (E4) and multi-seed aggregation remain future work once real BUSI ultrasound and thermography data replace synthetic placeholders.
+Enhanced Stage~A achieved \textbf{70.1\% balanced accuracy}, \textbf{84.7\% malignant recall}, and \textbf{0.763 AUC}---an absolute gain of 8.3 points in balanced accuracy over the initial baseline (61.8\%). Enhanced VQC Stage~B (69.0\%, 59.9\% recall) did not surpass the classical head; we recommend Stage~A enhanced for deployment. Table~\ref{tab:pilot} contrasts the WBCD tabular pilot with imaging results.
 
 \section{Explainability Analysis}
-Grad-CAM highlights spatial regions in EfficientNet feature maps. Transformer attention weights indicate modality vs.\ feature token contribution. SHAP analysis on compressed features and VQC gate perturbation (pilot study method) identifies discriminative dimensions and qubit sensitivity. Fig.~\ref{fig:case} shows a representative case study panel.
+Grad-CAM highlights spatial regions in EfficientNet feature maps. Transformer attention weights indicate modality vs.\ feature token contribution. Fig.~\ref{fig:case} shows a representative mammography case study.
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\linewidth]{figures/case_study_0_mammo.png}
-\caption{Explainability case study: input mammography image, Grad-CAM overlay, attention weights, and prediction summary.}
+\includegraphics[width=\linewidth]{case_study_0_mammo.png}
+\caption{Explainability case study: mammography input, Grad-CAM, attention, and prediction.}
 \label{fig:case}
 \end{figure}
 
 \section{Discussion}
-The framework supports single-modality clinical workflows without paired data requirements. Quantum simulation results demonstrate feasibility; real hardware deployment remains future work. Thermography data scarcity may limit third-modality claims---mammography and ultrasound provide primary evidence.
+The framework supports single-modality clinical workflows without paired data. On CBIS-DDSM, classical Stage~A with domain-appropriate preprocessing outperformed VQC Stage~B under simulation, suggesting quantum advantage may require larger imaging cohorts or task-specific circuit design. Thermography and ultrasound claims await real BUSI/thermo data.
 
-\textbf{Limitations.} Simulation-only quantum evaluation; ultrasound and thermography experiments used synthetic placeholders pending BUSI download; two-stage training adds complexity. Histopathology-scale corpora ($\sim$200k patches) were not used---see \texttt{DATA\_SCALE.md}.
+\textbf{Limitations.} Simulation-only quantum evaluation; synthetic non-mammography modalities; single seed (42) for primary imaging results; ROI-level CBIS-DDSM scale ($\sim$3k) vs patch-mined corpora in large-scale literature.
 
 \section{Conclusion}
-We presented a modality-level generalized hybrid quantum framework for breast cancer classification integrating Transformer-based invariance learning, VQC classification, and multi-method explainability. The approach enables scalable extension to MRI and histopathology modalities.
+We presented a modality-level generalized hybrid quantum framework for breast cancer classification. On CBIS-DDSM, enhanced classical Stage~A reached 70.1\% balanced accuracy with high malignant recall, establishing a reproducible baseline for future hybrid and cross-modality extensions.
+
+\section*{Data Availability}
+CBIS-DDSM is available from The Cancer Imaging Archive (DOI: 10.7937/K9/TCIA.2016.7O02S9CY). BUSI and thermography datasets are linked in the repository documentation. Train/val/test splits are regenerated via \texttt{setup\_datasets.py}.
 
 \section*{Code Availability}
-Implementation, configs, and experiment scripts are available in the project repository.
+Implementation, configs, publication figures, and reproduction scripts: \url{https://github.com/jpmkumar/mbc}. Generate figures with \texttt{python scripts/generate\_publication.py}.
+
+\section*{Ethics Statement}
+De-identified public datasets only; no PHI stored. See \texttt{paper/ETHICS\_STATEMENT.md}.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
