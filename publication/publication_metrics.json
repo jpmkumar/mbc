@@ -1,0 +1,111 @@
+{
+  "dataset": {
+    "name": "CBIS-DDSM (mammography ROI)",
+    "source_url": "https://doi.org/10.7937/K9/TCIA.2016.7O02S9CY",
+    "total_images": 2966,
+    "benign": 1469,
+    "malignant": 1497,
+    "train": 2076,
+    "val": 445,
+    "test": 445,
+    "split_ratio": "70/15/15",
+    "image_size": 224,
+    "modality_filter": "mammo only"
+  },
+  "pilot_wbcd_tabular": {
+    "note": "Wisconsin Breast Cancer Diagnostic — tabular baseline (prior work)",
+    "n_samples": 569,
+    "models": {
+      "SVM_RBF": {"accuracy": 0.974, "f1": 0.979, "auc": 0.996},
+      "VQC_standalone": {"accuracy": 0.939, "f1": 0.954, "auc": 0.978},
+      "Hybrid_MLP_VQC": {"accuracy": 0.877, "f1": 0.908, "auc": 0.938}
+    }
+  },
+  "mammography_experiments": [
+    {
+      "id": "baseline_stage_a",
+      "label": "Stage A (baseline)",
+      "config": "default.yaml",
+      "checkpoint": "E3_hybrid_seed42.pt",
+      "stage": "stage_a",
+      "preprocessing": false,
+      "test": {
+        "accuracy": 0.618,
+        "balanced_accuracy": 0.618,
+        "precision": 0.660,
+        "recall": 0.482,
+        "f1": 0.558,
+        "auc": 0.665,
+        "n_samples": 445,
+        "confusion_matrix": [[168, 55], [115, 107]]
+      }
+    },
+    {
+      "id": "benedetti_stage_b",
+      "label": "Stage B (Benedetti VQC)",
+      "config": "benedetti_vqc.yaml",
+      "checkpoint": "E3_hybrid_benedetti_seed42.pt",
+      "stage": "stage_b",
+      "preprocessing": false,
+      "test": {
+        "accuracy": 0.602,
+        "balanced_accuracy": 0.602,
+        "precision": 0.696,
+        "recall": 0.360,
+        "f1": 0.475,
+        "auc": 0.550,
+        "n_samples": 445,
+        "pred_positive_rate": 0.258,
+        "confusion_matrix": [[188, 35], [142, 80]]
+      }
+    },
+    {
+      "id": "enhanced_stage_a",
+      "label": "Stage A (enhanced)",
+      "config": "mammo_enhanced.yaml",
+      "checkpoint": "E3_hybrid_enhanced_seed42.pt",
+      "stage": "stage_a",
+      "preprocessing": "CLAHE + grayscale",
+      "best_stage": "stage_a",
+      "train_time_s": 5275,
+      "epochs": 30,
+      "test": {
+        "accuracy": 0.701,
+        "balanced_accuracy": 0.701,
+        "precision": 0.655,
+        "recall": 0.847,
+        "f1": 0.739,
+        "auc": 0.763,
+        "n_samples": 445,
+        "pred_positive_rate": 0.645,
+        "confusion_matrix": [[124, 99], [34, 188]]
+      }
+    },
+    {
+      "id": "enhanced_stage_b",
+      "label": "Stage B (enhanced VQC)",
+      "config": "mammo_enhanced.yaml",
+      "checkpoint": "E3_hybrid_enhanced_seed42.pt",
+      "stage": "stage_b",
+      "preprocessing": "CLAHE + grayscale",
+      "best_stage": "stage_b",
+      "train_time_s": 511,
+      "epochs": 20,
+      "test": {
+        "accuracy": 0.690,
+        "balanced_accuracy": 0.690,
+        "precision": 0.731,
+        "recall": 0.599,
+        "f1": 0.658,
+        "auc": 0.716,
+        "n_samples": 445,
+        "pred_positive_rate": 0.409,
+        "confusion_matrix": [[174, 49], [89, 133]]
+      }
+    }
+  ],
+  "recommended_reporting": {
+    "primary_model": "enhanced_stage_a",
+    "rationale": "Highest test balanced accuracy and malignant recall on CBIS-DDSM"
+  }
+}

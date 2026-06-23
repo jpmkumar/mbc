@@ -2,6 +2,7 @@
 
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
+\graphicspath{{../figures/}}
 \usepackage{cite}
 \usepackage{hyperref}
 \usepackage{booktabs}
@@ -76,27 +77,37 @@ Following EQML pilot findings~\cite{eqml_pilot2025}, we use two-stage training: 
 
 \textbf{Metrics.} Accuracy, precision, recall, F1, AUC-ROC; mean $\pm$ std over three seeds.
 
-\textbf{Hardware.} PyTorch + PennyLane \texttt{default.qubit} simulator; GPU when available.
+\textbf{Hardware.} PyTorch + PennyLane \texttt{lightning.qubit} simulator (adjoint); classical modules on GPU, VQC on CPU; mixed-precision training for Stage~A.
 
 \section{Results}
-Table~\ref{tab:main} summarizes core experiments. Leave-one-modality-out (E4) evaluates cross-modality generalization by training on two modalities and testing on the held-out third. Ablation studies (E6) quantify modality token and Transformer contributions. Qubit sweep (E7) replicates pilot study sensitivity analysis for 4, 6, and 8 qubits.
+We report mammography results on CBIS-DDSM ($n=2{,}966$ ROI images; 70/15/15 stratified split; test $n=445$). Table~\ref{tab:mammo} compares baseline and enhanced pipelines. Enhanced Stage~A applies grayscale conversion, CLAHE contrast enhancement, malignant class re-weighting, and 30-epoch classical-head training. Fig.~\ref{fig:metrics} and Fig.~\ref{fig:confusion} summarize test metrics and confusion matrices.
 
-\begin{table}[!t]
-\caption{Core experiment results (synthetic validation run; replace with real-dataset numbers before submission).}
-\label{tab:main}
+\input{../publication/tables/publication_tables.tex}
+
+\begin{figure}[!t]
 \centering
-\begin{tabular}{lccc}
-\toprule
-Model & Accuracy & F1 & AUC \\
-\midrule
-Classical Unified (E2) & --- & 0.471 & --- \\
-Hybrid Full (E3) & --- & 0.471 & --- \\
-LOMO Mammography & --- & 0.471 & --- \\
-LOMO Ultrasound & --- & --- & --- \\
-LOMO Thermography & --- & --- & --- \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics[width=\linewidth]{figures/fig_mammo_metrics_comparison.png}
+\caption{CBIS-DDSM test-set comparison: (a) balanced accuracy, recall, and precision; (b) F1 and AUC across training configurations.}
+\label{fig:metrics}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_confusion_matrices.png}
+\caption{Confusion matrices on CBIS-DDSM test set ($n=445$): (a) enhanced Stage~A (recommended); (b) enhanced Stage~B VQC.}
+\label{fig:confusion}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig_dataset_splits.png}
+\caption{CBIS-DDSM mammography dataset split sizes.}
+\label{fig:dataset}
+\end{figure}
+
+Enhanced Stage~A achieved \textbf{70.1\% balanced accuracy}, \textbf{84.7\% malignant recall}, and \textbf{0.763 AUC} on the held-out test set---an absolute gain of 8.3 points in balanced accuracy over the initial Stage~A baseline (61.8\%). Benedetti-aligned VQC Stage~B (69.0\% balanced accuracy, 59.9\% recall) did not surpass the classical head; we therefore recommend Stage~A enhanced for deployment and report VQC as an ablation. Table~\ref{tab:pilot} contrasts the prior WBCD tabular pilot ($\sim$97\% SVM accuracy) with imaging results, emphasizing the increased difficulty of mammography ROI classification.
+
+Leave-one-modality-out (E4) and multi-seed aggregation remain future work once real BUSI ultrasound and thermography data replace synthetic placeholders.
 
 \section{Explainability Analysis}
 Grad-CAM highlights spatial regions in EfficientNet feature maps. Transformer attention weights indicate modality vs.\ feature token contribution. SHAP analysis on compressed features and VQC gate perturbation (pilot study method) identifies discriminative dimensions and qubit sensitivity. Fig.~\ref{fig:case} shows a representative case study panel.
@@ -111,7 +122,7 @@ Grad-CAM highlights spatial regions in EfficientNet feature maps. Transformer at
 \section{Discussion}
 The framework supports single-modality clinical workflows without paired data requirements. Quantum simulation results demonstrate feasibility; real hardware deployment remains future work. Thermography data scarcity may limit third-modality claims---mammography and ultrasound provide primary evidence.
 
-\textbf{Limitations.} Simulation-only quantum evaluation; synthetic or public datasets may not capture full clinical diversity; two-stage training adds complexity.
+\textbf{Limitations.} Simulation-only quantum evaluation; ultrasound and thermography experiments used synthetic placeholders pending BUSI download; two-stage training adds complexity. Histopathology-scale corpora ($\sim$200k patches) were not used---see \texttt{DATA\_SCALE.md}.
 
 \section{Conclusion}
 We presented a modality-level generalized hybrid quantum framework for breast cancer classification integrating Transformer-based invariance learning, VQC classification, and multi-method explainability. The approach enables scalable extension to MRI and histopathology modalities.
