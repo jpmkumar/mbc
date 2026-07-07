@@ -137,7 +137,9 @@ Then re-run install (if `requirements.txt` changed) and training.
 |------|--------|--------------|
 | Python source (`src/`, `experiments/`) | ✅ | ❌ |
 | Configs, scripts, paper | ✅ | ❌ |
-| `mbc_mammo.zip` / images | ❌ | ✅ |
+| `mbc_mammo.zip` / mammo images | ❌ | ✅ |
+| `Histopathology-dataset.zip` | ❌ | ✅ — see [`COLAB_HISTOPATH.md`](COLAB_HISTOPATH.md) |
+| Histopath fold CSVs / checkpoints | ❌ | ✅ |
 | Checkpoints, `results/` | ❌ | ✅ |
 | `.venv`, `data/processed/` | ❌ (gitignored) | optional |
 

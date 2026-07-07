@@ -27,6 +27,9 @@ python experiments/run_training.py \
   --config configs/mammo_enhanced.yaml \
   --experiment hybrid --modality mammo --stage all
 
+# Histopathology IDC patches (Colab: see COLAB_HISTOPATH.md)
+python scripts/train_histopath_cv.py --fold 0 --experiment E2
+
 # Publication figures + LaTeX tables
 python scripts/generate_publication.py
 make -C paper pdf
@@ -50,6 +53,7 @@ scripts/              analyze_results, generate_publication
 | Modality | Dataset | Status in repo |
 |----------|---------|----------------|
 | Mammography | [CBIS-DDSM](https://doi.org/10.7937/K9/TCIA.2016.7O02S9CY) | **Real (~2966 ROIs)** |
+| Histopathology | Kaggle Breast Histopathology (IDC patches) | **Scripts + 5-fold CV** — [`COLAB_HISTOPATH.md`](COLAB_HISTOPATH.md) |
 | Ultrasound | [BUSI](https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset) | Synthetic placeholder |
 | Thermography | Kaggle thermo DB | Synthetic placeholder |
 

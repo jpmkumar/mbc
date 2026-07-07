@@ -60,4 +60,4 @@ python scripts/train_histopath_cv.py --compare-classical
 
 Results: `results/histopath/cv_summary.json` (mean ± std per fold; Friedman when ≥2 folds/models).
 
-**Colab:** mount Drive → unzip `mbc_mammo.zip` → run `setup_datasets.py` → train.
+**Colab:** full step-by-step notebook cells in [`COLAB_HISTOPATH.md`](../../COLAB_HISTOPATH.md).
