@@ -1,0 +1,67 @@
+# Histopathology (IDC patch) experiment configuration
+
+project:
+  name: "IDC Histopathology Patch Classification"
+  seed: 42
+  experiment_suffix: "_histopath"
+
+data:
+  root: "data/splits/histopath"
+  archive_path: null
+  image_size: 224
+  num_workers: 2
+  modalities:
+    - histopath
+  preprocessing:
+    enabled: true
+    histopath:
+      grayscale: false
+      clahe: false
+
+model:
+  encoder: "efficientnet_b0"
+  encoder_dim: 1280
+  projection_dim: 2048
+  transformer:
+    num_layers: 2
+    num_heads: 4
+    dim_feedforward: 512
+    dropout: 0.1
+  compression_dims: [128, 32, 8]
+  num_modality_tokens: 1
+  num_classes: 2
+  quantum:
+    n_qubits: 8
+    n_layers: 2
+    entanglement: "linear"
+
+training:
+  batch_size: 32
+  stage_a_epochs: 10
+  stage_b_epochs: 15
+  stage_c_epochs: 3
+  lr_classical: 1.0e-4
+  lr_quantum: 1.0e-4
+  lr_joint: 1.0e-5
+  weight_decay: 1.0e-4
+  freeze_encoder_epochs: 3
+  freeze_backbone_in_stage_b: true
+  cache_frozen_backbone_features: true
+  classical_device: cpu
+  quantum_device: cpu
+  val_interval: 1
+  checkpoint_interval: 1
+  selection_metric: balanced_accuracy
+  use_class_weights: true
+  malignant_weight_multiplier: 1.0
+  eval_threshold: 0.5
+  val_ratio: 0.1
+
+experiments:
+  seeds: [42]
+  qubit_sweep: [8]
+
+paths:
+  results: "results/histopath"
+  figures: "figures"
+  checkpoints: "results/histopath/checkpoints"

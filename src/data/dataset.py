@@ -8,7 +8,7 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
-from .constants import MODALITY_TO_ID
+from .constants import HISTOPATH_MODALITY, HISTOPATH_MODALITY_ID, MODALITY_TO_ID
 from .preprocessing import preprocess_image
 
 
@@ -22,17 +22,34 @@ class UnifiedBreastDataset(Dataset):
         modality_filter: Optional[list[str]] = None,
         preprocess_config: Optional[dict] = None,
         train_modality: Optional[str] = None,
+        data_root: str | Path | None = None,
+        max_samples: int | None = None,
+        max_eval_samples: int | None = None,
     ):
         self.manifest = pd.read_csv(manifest_path)
         if modality_filter:
             self.manifest = self.manifest[
                 self.manifest["modality"].isin(modality_filter)
             ].reset_index(drop=True)
+        sample_limit = max_samples
+        if sample_limit is None and max_eval_samples is not None:
+            sample_limit = max_eval_samples
+        if sample_limit is not None and len(self.manifest) > sample_limit:
+            self.manifest = self.manifest.sample(
+                n=sample_limit, random_state=42
+            ).reset_index(drop=True)
         self.transform = transform
         self.preprocess_config = preprocess_config
         self.train_modality = train_modality
-        # Manifest paths are relative to data/processed
-        self.root = Path(manifest_path).parent.parent / "processed"
+        if data_root is not None:
+            self.root = Path(data_root)
+        elif len(self.manifest) and self.manifest.iloc[0]["modality"] == HISTOPATH_MODALITY:
+            raise ValueError(
+                "Histopath manifests require data_root pointing to the archive folder."
+            )
+        else:
+            # Default layout for mammo / ultrasound / thermo
+            self.root = Path(manifest_path).parent.parent / "processed"
 
     def __len__(self) -> int:
         return len(self.manifest)
@@ -47,7 +64,11 @@ class UnifiedBreastDataset(Dataset):
             image = self.transform(image)
 
         label = int(row["label"])
-        modality_id = MODALITY_TO_ID[row["modality"]]
+        modality_id = (
+            HISTOPATH_MODALITY_ID
+            if modality == HISTOPATH_MODALITY
+            else MODALITY_TO_ID[row["modality"]]
+        )
         return {
             "image": image,
             "label": torch.tensor(label, dtype=torch.long),

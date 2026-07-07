@@ -15,6 +15,7 @@ DEFAULT_MODALITY_PREPROCESS = {
     "mammo": {"grayscale": True, "clahe": True, "clip_limit": 2.0, "grid_size": 8},
     "ultrasound": {"grayscale": True, "clahe": True, "clip_limit": 2.0, "grid_size": 8},
     "thermo": {"grayscale": False, "clahe": False, "clip_limit": 2.0, "grid_size": 8},
+    "histopath": {"grayscale": False, "clahe": False, "clip_limit": 2.0, "grid_size": 8},
 }
 
 

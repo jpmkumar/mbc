@@ -16,6 +16,9 @@ def create_dataloaders(
     eval_train_transforms: bool = False,
     preprocess_config: dict | None = None,
     prefetch_factor: int = 2,
+    data_root: str | None = None,
+    max_samples: int | None = None,
+    max_eval_samples: int | None = None,
 ):
     train_modality = modality_filter[0] if modality_filter and len(modality_filter) == 1 else None
     loader_kwargs = {}
@@ -31,12 +34,15 @@ def create_dataloaders(
             transform = get_train_transforms(image_size, modality=train_modality)
         else:
             transform = get_eval_transforms(image_size)
+        limit = max_samples if split_name == "train" else max_eval_samples
         dataset = UnifiedBreastDataset(
             manifest_path,
             transform=transform,
             modality_filter=modality_filter,
             preprocess_config=preprocess_config,
             train_modality=train_modality,
+            data_root=data_root,
+            max_samples=limit,
         )
         loaders[split_name] = DataLoader(
             dataset,

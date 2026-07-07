@@ -2,6 +2,10 @@
 data/raw/
 data/processed/
 data/splits/*.csv
+data/splits/histopath/train.csv
+data/splits/histopath/test.csv
+data/splits/histopath/folds/**/*.csv
+data/splits/histopath/runtime/
 
 # Python
 __pycache__/
