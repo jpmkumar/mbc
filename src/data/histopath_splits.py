@@ -104,22 +104,15 @@ def create_stratified_patient_folds(
     return df, folds
 
 
-def build_patch_manifest(
+def build_master_patch_index(
     archive_path: Path,
     patient_df: pd.DataFrame,
-    train_ids: list[str],
-    test_ids: list[str],
 ) -> pd.DataFrame:
+    """Scan the archive once and return one row per patch."""
     archive_path = Path(archive_path)
-    split_map = {pid: "train" for pid in train_ids}
-    split_map.update({pid: "test" for pid in test_ids})
-
     records = []
     for row in patient_df.itertuples(index=False):
         patient_id = str(row.patient_id)
-        split = split_map.get(patient_id)
-        if split is None:
-            continue
         for label, cls in ((0, "0"), (1, "1")):
             cls_dir = archive_path / patient_id / cls
             for fname in _list_patches(cls_dir):
@@ -128,9 +121,29 @@ def build_patch_manifest(
                     "modality": "histopath",
                     "label": label,
                     "patient_id": patient_id,
-                    "split": split,
                 })
     return pd.DataFrame(records)
+
+
+def build_patch_manifest(
+    archive_path: Path,
+    patient_df: pd.DataFrame,
+    train_ids: list[str],
+    test_ids: list[str],
+    patch_index: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    train_ids = [str(pid) for pid in train_ids]
+    test_ids = [str(pid) for pid in test_ids]
+
+    if patch_index is None:
+        patch_index = build_master_patch_index(archive_path, patient_df)
+
+    manifest = patch_index.copy()
+    manifest["patient_id"] = manifest["patient_id"].astype(str)
+    manifest["split"] = manifest["patient_id"].map(
+        {pid: "train" for pid in train_ids} | {pid: "test" for pid in test_ids}
+    )
+    return manifest[manifest["split"].notna()].reset_index(drop=True)
 
 
 def write_cv_fold_manifests(
@@ -138,13 +151,35 @@ def write_cv_fold_manifests(
     patient_df: pd.DataFrame,
     folds: list[dict],
     output_dir: Path,
+    skip_existing: bool = False,
 ) -> dict:
     output_dir = Path(output_dir)
     folds_dir = output_dir / "folds"
     folds_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_paths: list[dict] = []
+    pending_folds = []
     for fold in folds:
+        fold_idx = fold["fold"]
+        fold_dir = folds_dir / f"fold_{fold_idx}"
+        train_path = fold_dir / "train.csv"
+        test_path = fold_dir / "test.csv"
+        if skip_existing and train_path.exists() and test_path.exists():
+            manifest_paths.append({
+                "fold": fold_idx,
+                "train": str(train_path),
+                "test": str(test_path),
+            })
+            continue
+        pending_folds.append(fold)
+
+    patch_index = None
+    if pending_folds:
+        print(f"Indexing {int(patient_df['total'].sum()):,} patches (one archive scan)...")
+        patch_index = build_master_patch_index(archive_path, patient_df)
+        print(f"Writing {len(pending_folds)} fold manifest(s)...")
+
+    for fold in pending_folds:
         fold_idx = fold["fold"]
         fold_dir = folds_dir / f"fold_{fold_idx}"
         fold_dir.mkdir(parents=True, exist_ok=True)
@@ -154,6 +189,7 @@ def write_cv_fold_manifests(
             patient_df,
             fold["train_patient_ids"],
             fold["test_patient_ids"],
+            patch_index=patch_index,
         )
         train_path = fold_dir / "train.csv"
         test_path = fold_dir / "test.csv"
@@ -168,7 +204,9 @@ def write_cv_fold_manifests(
             "train": str(train_path),
             "test": str(test_path),
         })
+        print(f"  saved fold {fold_idx}: {train_path.name}, {test_path.name}")
 
+    manifest_paths.sort(key=lambda item: item["fold"])
     return {"folds": manifest_paths}
 
 
@@ -178,6 +216,25 @@ DEFAULT_ARCHIVE_CANDIDATES = (
     Path.home() / "Downloads" / "archive",
     Path.home() / "Downloads" / "Histopathology-dataset",
 )
+
+
+def discover_archive_path() -> Path | None:
+    """Find IDC archive under common cloud notebook mount points."""
+    search_roots = [
+        Path("/kaggle/input"),
+        Path("/content"),
+        Path.cwd(),
+    ]
+    for root in search_roots:
+        if not root.is_dir():
+            continue
+        for current, dirnames, _ in os.walk(root):
+            current_path = Path(current)
+            if EXCLUDED_DIR in dirnames:
+                return current_path
+            if "10253" in dirnames and (current_path / "10253" / "0").is_dir():
+                return current_path
+    return None
 
 
 def resolve_archive_path(
@@ -197,6 +254,10 @@ def resolve_archive_path(
             saved = Path(stats["archive_path"])
             if saved.is_dir():
                 return saved.resolve()
+
+    discovered = discover_archive_path()
+    if discovered is not None:
+        return discovered.resolve()
 
     for candidate in DEFAULT_ARCHIVE_CANDIDATES:
         if candidate.is_dir():

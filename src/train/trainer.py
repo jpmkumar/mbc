@@ -133,6 +133,8 @@ class HybridTrainer:
         else:
             classical = requested
 
+        classical = self._ensure_supported_device(classical)
+
         if getattr(self.model, "use_quantum", False):
             self.classical_device = torch.device(classical)
             self.quantum_device = torch.device(
@@ -149,7 +151,11 @@ class HybridTrainer:
         else:
             self.classical_device = torch.device(classical)
             self.quantum_device = self.classical_device
-            self.model.to(self.classical_device)
+            if hasattr(self.model, "set_devices"):
+                self.model.set_devices(self.classical_device, self.quantum_device)
+            else:
+                self.model.to(self.classical_device)
+            print(f"Classical device: {self.classical_device}")
 
     @staticmethod
     def _default_device() -> str:
@@ -158,6 +164,29 @@ class HybridTrainer:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return "mps"
         return "cpu"
+
+    @staticmethod
+    def _ensure_supported_device(device_name: str) -> str:
+        """Fall back to CPU when CUDA GPU is too old for this PyTorch build."""
+        if device_name != "cuda" or not torch.cuda.is_available():
+            return device_name
+
+        try:
+            capability = torch.cuda.get_device_capability(0)
+            major = capability[0]
+        except Exception:
+            return device_name
+
+        # PyTorch 2.x wheels often drop pre-Volta GPUs (P100 = sm_60).
+        if major < 7:
+            gpu_name = torch.cuda.get_device_name(0)
+            print(
+                f"WARNING: {gpu_name} (CUDA sm_{major}{capability[1]}) is not supported "
+                "by this PyTorch build. Falling back to CPU. "
+                "On Kaggle, switch accelerator to GPU T4 x2 instead of P100."
+            )
+            return "cpu"
+        return device_name
 
     def _build_stage_plan(self, stages_filter: list[str] | None) -> list[tuple[str, int]]:
         stages = [

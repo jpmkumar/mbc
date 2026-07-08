@@ -220,7 +220,8 @@ python scripts/train_histopath_cv.py --fold 0 --quick --max-samples 256 --experi
 
 | Problem | Fix |
 |---------|-----|
-| `Archive path not found` | Re-run Cell 3; check zip path on Drive |
+| `CUDA error: no kernel image is available` on **P100** | Kaggle's PyTorch does **not** support P100 (sm_60). Switch to **GPU T4 x2** |
+| Archive path not found | Re-run Cell 3; check zip path on Drive |
 | `No k-fold manifests found` | Run Cell 4 (`split_histopath_archive.py --mode cv`) |
 | Colab disconnects | Train one `--fold` at a time; copy checkpoints to Drive after each run |
 | Out of memory | Lower `batch_size` in `configs/histopath.yaml` (e.g. 16) |

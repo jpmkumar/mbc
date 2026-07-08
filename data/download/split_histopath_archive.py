@@ -128,6 +128,7 @@ def run_cv(
     n_folds: int,
     seed: int,
     n_bins: int,
+    skip_existing: bool = False,
 ) -> None:
     patient_df, folds = create_stratified_patient_folds(
         patient_df, n_splits=n_folds, seed=seed, n_bins=n_bins
@@ -150,7 +151,9 @@ def run_cv(
         f"std={pd.Series(test_ratios).std(ddof=0):.3f}"
     )
 
-    write_cv_fold_manifests(archive_path, patient_df, folds, output_dir)
+    write_cv_fold_manifests(
+        archive_path, patient_df, folds, output_dir, skip_existing=skip_existing
+    )
     write_split_metadata(
         archive_path,
         patient_df,
@@ -186,6 +189,11 @@ def main():
     parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bins", type=int, default=4)
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip fold CSV generation when train.csv and test.csv already exist",
+    )
     args = parser.parse_args()
 
     archive_path = resolve_archive_path(args.archive_path)
@@ -198,7 +206,15 @@ def main():
     print(f"Total patches: {int(patient_df['total'].sum()):,}")
 
     if args.mode == "cv":
-        run_cv(archive_path, patient_df, output_dir, args.folds, args.seed, args.bins)
+        run_cv(
+            archive_path,
+            patient_df,
+            output_dir,
+            args.folds,
+            args.seed,
+            args.bins,
+            skip_existing=args.skip_existing,
+        )
         print(f"\nSaved fold manifests under: {output_dir / 'folds'}")
     else:
         run_holdout(
