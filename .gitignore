@@ -28,6 +28,11 @@ runs/
 ~$*
 .cursor/
 
+# Local notes / AI-assisted drafts (not for public repo)
+InitialPaperInfo.docx
+HISTOPATH_QML_REPORT.md
+paper/manuscript_reference.docx
+
 # LaTeX build
 paper/*.aux
 paper/*.bbl
