@@ -17,7 +17,37 @@ Full staged commands for **patient-level 5-fold CV** on Kaggle, with **backup af
 | **3** | Friedman E2 vs E3 | all | `--compare-classical` |
 | **4** | Copy results to Mac | — | — |
 
-**Expected time (GPU T4, per fold):** ~5–6 h (E2), ~8–12 h (E3).
+**Expected time (GPU T4, per fold):** ~5–6 h (E2, less with early stopping), ~8–12 h (E3).
+
+---
+
+## IMPORTANT — how to save results reliably
+
+An interactive **draft** session **wipes `/kaggle/working/` when you power off**. If you only create the
+backup zip and power off without downloading it, the results (checkpoints) are lost even though the
+metrics printed in the log.
+
+Choose **one** of these to keep results safe:
+
+### Option A — Save Version → Save & Run All (recommended for one fold)
+
+1. Put the setup + one training fold + backup cell in the notebook.
+2. Click **Save Version → Save & Run All**.
+3. Kaggle runs it as a **background job** (survives browser close), **persists `/kaggle/working/`
+   output**, and **emails you** when done (like fold 0).
+4. After it finishes, download the zip from the **Output** tab.
+
+Requirement: the whole notebook must finish within **12 h**. One E2 fold fits easily.
+
+### Option B — interactive, but download before power off
+
+1. Run the training + backup cells.
+2. When the backup prints `... 130M ...mbc_histopath_*.zip`, **download it**.
+3. **Verify the file is ~130 MB in `~/Downloads`** (a few-kB zip means the backup ran before
+   training finished — rerun the backup cell).
+4. **Only then** `Run → Power off`.
+
+Do **not** power off until the ~130 MB zip is confirmed on your Mac.
 
 ---
 
@@ -448,7 +478,9 @@ Each backup includes **all folds completed so far** under `histopath/checkpoints
 | `loss=nan` mid-training | Best checkpoint already saved; use `*_seed42.pt` not `*_latest.pt` |
 | `FloatTensor` / `HalfTensor` | `!git pull` (needs commit `b7d1e45+`) |
 | Session died | Use downloaded zip; re-run only missing folds |
-| **Save & Run All** while training | **Don't** — restarts notebook from top |
+| Powered off before download | Draft `/kaggle/working/` is wiped — use **Save & Run All** (Option A) or download the ~130 MB zip first (Option B) |
+| Backup zip only a few kB | Backup cell ran before training finished; rerun it after training completes |
+| **Save & Run All** mid interactive run | Don't click it *during* a live draft run (it starts a separate clean run); use it deliberately as Option A instead |
 
 ---
 
@@ -467,14 +499,15 @@ After `git pull`, folds 2+ use these automatically. Re-run fold 0–1 only if yo
 
 ---
 
-## Fold 0 reference results (E2, completed)
+## E2 reference results (completed folds)
 
-| Metric | Test |
-|--------|------|
-| Balanced accuracy | 87.97% |
-| AUC | 0.949 |
-| F1 | 0.807 |
-| Train time | ~5.3 h (GPU) |
+| Fold | Balanced accuracy | F1 | AUC | Threshold | Notes |
+|------|-------------------|-----|-----|-----------|-------|
+| 0 | 0.880 | 0.807 | 0.949 | 0.50 | 25 epochs, ~5.3 h |
+| 1 | 0.873 | 0.800 | 0.946 | 0.50 | 25 epochs |
+| 2 | 0.884 | 0.827 | 0.954 | 0.55 | early stop @ ep 12, val-tuned threshold |
+
+Folds 0–1 used the fixed 0.5 threshold; fold 2+ use early stopping + val-tuned threshold.
 
 ---
 
