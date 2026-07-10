@@ -28,10 +28,16 @@ runs/
 ~$*
 .cursor/
 
-# Local notes / AI-assisted drafts (not for public repo)
+# Local notes / AI-assisted drafts (not for public repo — journal submission)
 InitialPaperInfo.docx
 HISTOPATH_QML_REPORT.md
+paper/manuscript.docx
+paper/manuscript_neutral.md
 paper/manuscript_reference.docx
+scripts/generate_manuscript_docx.py
+**/agent-transcripts/
+**/*_QML_REPORT*.md
+**/*viva*.md
 
 # LaTeX build
 paper/*.aux
