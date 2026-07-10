@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from src.utils.metrics import compute_metrics
+from src.utils.metrics import compute_metrics, preds_from_threshold
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -12,23 +12,28 @@ from sklearn.metrics import (
 
 
 @torch.no_grad()
-def evaluate_model(model: nn.Module, loader, device: str) -> dict:
+def evaluate_model(
+    model: nn.Module,
+    loader,
+    device: str,
+    threshold: float = 0.5,
+) -> dict:
     model.eval()
-    all_labels, all_preds, all_probs = [], [], []
+    all_labels, all_probs = [], []
 
     for batch in loader:
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
         modality_ids = batch["modality_id"].to(device)
         logits = model(images, modality_ids)
-        probs = torch.softmax(logits, dim=1)
-        preds = logits.argmax(dim=1)
+        probs = torch.softmax(logits.float(), dim=1)
 
         all_labels.extend(labels.cpu().numpy())
-        all_preds.extend(preds.cpu().numpy())
         all_probs.extend(probs[:, 1].cpu().numpy())
 
+    all_preds = preds_from_threshold(all_probs, threshold).tolist()
     metrics = compute_metrics(all_labels, all_preds, all_probs)
+    metrics["threshold"] = float(threshold)
     metrics["labels"] = all_labels
     metrics["preds"] = all_preds
     metrics["probs"] = all_probs

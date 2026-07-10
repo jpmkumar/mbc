@@ -29,6 +29,53 @@ from src.train.seed import set_seed
 from src.train.trainer import HybridTrainer
 
 
+from src.utils.metrics import threshold_sweep
+
+
+def _metrics_summary(metrics: dict) -> dict:
+    return {
+        k: float(v)
+        for k, v in metrics.items()
+        if k not in ("labels", "preds", "probs", "roc") and isinstance(v, (int, float))
+    }
+
+
+def _resolve_eval_threshold(
+    model,
+    val_loader,
+    device,
+    train_cfg: dict,
+) -> tuple[float, dict]:
+    """Pick a decision threshold on validation only (real-world safe)."""
+    default_threshold = float(train_cfg.get("eval_threshold", 0.5))
+    meta = {
+        "tuned": False,
+        "threshold": default_threshold,
+        "threshold_metric": train_cfg.get("threshold_metric", "f1"),
+        "val_score_at_threshold": None,
+    }
+    if not train_cfg.get("tune_threshold", False):
+        return default_threshold, meta
+
+    val_full = evaluate_model(model, val_loader, device, threshold=default_threshold)
+    metric_name = str(train_cfg.get("threshold_metric", "f1"))
+    _, best = threshold_sweep(val_full["labels"], val_full["probs"], metric=metric_name)
+    meta.update(
+        {
+            "tuned": True,
+            "threshold": float(best["threshold"]),
+            "threshold_metric": metric_name,
+            "val_score_at_threshold": float(best.get(metric_name, best["f1"])),
+            "val_metrics_at_threshold": _metrics_summary(best),
+        }
+    )
+    print(
+        f"Threshold tuning on val: {metric_name}={meta['val_score_at_threshold']:.3f} "
+        f"at threshold={meta['threshold']:.2f}"
+    )
+    return meta["threshold"], meta
+
+
 def _build_model(config: dict, experiment: str):
     model_cfg = config["model"]
     quantum_cfg = model_cfg.get("quantum", {})
@@ -161,18 +208,24 @@ def _run_fold(
             trainer.stage_a_epochs = 2
 
     train_metrics = trainer.train()
-    test_metrics = evaluate_model(model, loaders["test"], trainer.device)
-    summary = {
-        k: float(v)
-        for k, v in test_metrics.items()
-        if k not in ("labels", "preds", "probs", "roc") and isinstance(v, (int, float))
-    }
+    threshold, threshold_meta = _resolve_eval_threshold(
+        model,
+        loaders["val"],
+        str(trainer.device),
+        train_cfg,
+    )
+    test_metrics = evaluate_model(
+        model, loaders["test"], trainer.device, threshold=threshold
+    )
+    summary = _metrics_summary(test_metrics)
+    summary["threshold"] = threshold
     return {
         "fold": fold,
         "experiment": experiment,
         "seed": seed,
         "train_metrics": train_metrics,
         "test_metrics": summary,
+        "threshold_tuning": threshold_meta,
     }
 
 

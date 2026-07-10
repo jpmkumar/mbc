@@ -1,6 +1,7 @@
 """Two-stage training: classical head first, then VQC head."""
 
 import json
+import math
 import time
 from pathlib import Path
 
@@ -86,6 +87,10 @@ class HybridTrainer:
         self.selection_metric = train_cfg.get(
             "selection_metric", "balanced_accuracy"
         )
+        self.early_stopping_patience = int(
+            train_cfg.get("early_stopping_patience", 0) or 0
+        )
+        self.grad_clip_norm = float(train_cfg.get("grad_clip_norm", 0.0) or 0.0)
         self.val_interval = max(1, int(train_cfg.get("val_interval", 1)))
         self.checkpoint_interval = max(
             1, int(train_cfg.get("checkpoint_interval", 1))
@@ -119,6 +124,7 @@ class HybridTrainer:
         self.best_stage = "stage_a"
         self.stage_epochs_done = {s: 0 for s in self.STAGES}
         self.total_epochs = 0
+        self._epochs_without_improvement = 0
         self._feature_loaders: dict[str, DataLoader] = {}
 
     @property
@@ -395,12 +401,25 @@ class HybridTrainer:
             logits, labels = self._compute_logits(batch, use_cache, stage)
             loss = self._compute_loss(logits, labels)
 
+            if not math.isfinite(loss.item()):
+                print(f"WARNING: non-finite loss in {stage} epoch {epoch+1}; skipping batch")
+                continue
+
             if self.use_amp and not use_cache:
                 self.scaler.scale(loss).backward()
+                if self.grad_clip_norm > 0:
+                    self.scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.grad_clip_norm
+                    )
                 self.scaler.step(optimizer)
                 self.scaler.update()
             else:
                 loss.backward()
+                if self.grad_clip_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.grad_clip_norm
+                    )
                 optimizer.step()
             total_loss += loss.item()
 
@@ -616,6 +635,7 @@ class HybridTrainer:
 
             self._configure_stage(stage_name)
             self._prepare_feature_loaders(stage_name)
+            self._epochs_without_improvement = 0
             param_groups = self._get_param_groups(stage_name)
             optimizer = torch.optim.AdamW(
                 param_groups,
@@ -646,6 +666,9 @@ class HybridTrainer:
                             k: v.cpu().clone()
                             for k, v in self.model.state_dict().items()
                         }
+                        self._epochs_without_improvement = 0
+                    else:
+                        self._epochs_without_improvement += 1
 
                 self.total_epochs += 1
                 self.stage_epochs_done[stage_name] = epoch_num
@@ -663,6 +686,17 @@ class HybridTrainer:
                     f"{stage_name} epoch {epoch_num}/{n_epochs} | "
                     f"loss={loss:.4f} | {metric_str}best={self.best_score:.3f}"
                 )
+
+                if (
+                    self.early_stopping_patience > 0
+                    and val_metrics is not None
+                    and self._epochs_without_improvement >= self.early_stopping_patience
+                ):
+                    print(
+                        f"Early stopping {stage_name}: no val improvement for "
+                        f"{self.early_stopping_patience} epoch(s)"
+                    )
+                    break
 
         if self.best_state:
             filtered, _ = filter_compatible_state_dict(self.model, self.best_state)

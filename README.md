@@ -53,7 +53,7 @@ scripts/              analyze_results, generate_publication
 | Modality | Dataset | Status in repo |
 |----------|---------|----------------|
 | Mammography | [CBIS-DDSM](https://doi.org/10.7937/K9/TCIA.2016.7O02S9CY) | **Real (~2966 ROIs)** |
-| Histopathology | Kaggle Breast Histopathology (IDC patches) | **Scripts + 5-fold CV** — [`COLAB_HISTOPATH.md`](COLAB_HISTOPATH.md) |
+| Histopathology | Kaggle Breast Histopathology (IDC patches) | **Scripts + 5-fold CV** — [`KAGGLE_HISTOPATH.md`](KAGGLE_HISTOPATH.md) |
 | Ultrasound | [BUSI](https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset) | Synthetic placeholder |
 | Thermography | Kaggle thermo DB | Synthetic placeholder |
 
