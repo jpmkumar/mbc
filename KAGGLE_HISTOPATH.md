@@ -51,6 +51,88 @@ Do **not** power off until the ~130 MB zip is confirmed on your Mac.
 
 ---
 
+## Quick single-fold run (copy-paste, use with Save & Run All)
+
+Reusable 5-cell block for **one fold** of E2 or E3. Change `FOLD` and `EXPERIMENT` in Cell 1,
+paste the cells in order, then **Save Version → Save & Run All**.
+
+**Cell 1 — pick the fold/experiment**
+
+```python
+FOLD = 3          # 0..4
+EXPERIMENT = "E2" # "E2" (classical) or "E3" (hybrid quantum)
+```
+
+**Cell 2 — clone + install**
+
+```python
+import os
+if os.path.isdir("/kaggle/working/mbc"):
+    !rm -rf /kaggle/working/mbc
+!git clone https://github.com/jpmkumar/mbc.git /kaggle/working/mbc
+%cd /kaggle/working/mbc
+!git log -1 --oneline
+!pip install -q -r requirements.txt
+```
+
+**Cell 3 — find dataset + enable GPU**
+
+```python
+from pathlib import Path
+
+ARCHIVE = None
+for root, dirs, _ in os.walk("/kaggle/input"):
+    if "IDC_regular_ps50_idx5" in dirs or any(d.isdigit() and len(d) >= 4 for d in dirs):
+        ARCHIVE = root
+        break
+if ARCHIVE is None:
+    ARCHIVE = "/kaggle/input/datasets/paultimothymooney/breast-histopathology-images"
+print("ARCHIVE =", ARCHIVE)
+
+p = Path("configs/histopath.yaml")
+t = p.read_text()
+if "classical_device: cpu" in t:
+    p.write_text(t.replace("classical_device: cpu", "classical_device: auto"))
+
+import torch
+print("CUDA:", torch.cuda.is_available(),
+      torch.cuda.get_device_name(0) if torch.cuda.is_available() else "NO GPU")
+```
+
+**Cell 4 — splits (regenerate each fresh session) + train**
+
+```python
+if not os.path.isfile("data/splits/histopath/folds/fold_0/train.csv"):
+    !python data/download/split_histopath_archive.py \
+      --archive-path "{ARCHIVE}" --mode cv --folds 5
+
+!python scripts/train_histopath_cv.py \
+  --fold {FOLD} --experiment {EXPERIMENT} --archive-path "{ARCHIVE}"
+```
+
+**Cell 5 — backup zip**
+
+```python
+import shutil
+from datetime import datetime
+
+stamp = datetime.now().strftime("%Y%m%d_%H%M")
+label = f"fold{FOLD}_{EXPERIMENT.lower()}"
+backup = Path(f"/kaggle/working/mbc_backup_{stamp}_{label}")
+backup.mkdir(parents=True, exist_ok=True)
+for src, name in [(Path("results/histopath"), "histopath"),
+                  (Path("data/splits/histopath"), "splits")]:
+    if src.exists():
+        shutil.copytree(src, backup / name, dirs_exist_ok=True)
+!cd /kaggle/working && zip -rq mbc_histopath_{stamp}_{label}.zip {backup.name}
+!ls -lh /kaggle/working/mbc_histopath_{stamp}_{label}.zip
+```
+
+After **Save & Run All** finishes: download the zip from the **Output** tab, then copy into the repo
+under `results/histopath_kaggle_fold{N}/` (local only, gitignored).
+
+---
+
 ## Kaggle settings (every session)
 
 1. **Settings → Accelerator → GPU T4 ×2** (do **not** use P100 — unsupported by current PyTorch)
