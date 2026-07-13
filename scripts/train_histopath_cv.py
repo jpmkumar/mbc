@@ -29,7 +29,7 @@ from src.train.seed import set_seed
 from src.train.trainer import HybridTrainer
 
 
-from src.utils.metrics import threshold_sweep
+from src.utils.metrics import threshold_for_target_recall, threshold_sweep
 
 
 def _metrics_summary(metrics: dict) -> dict:
@@ -59,20 +59,38 @@ def _resolve_eval_threshold(
 
     val_full = evaluate_model(model, val_loader, device, threshold=default_threshold)
     metric_name = str(train_cfg.get("threshold_metric", "f1"))
-    _, best = threshold_sweep(val_full["labels"], val_full["probs"], metric=metric_name)
+    if metric_name == "recall_target":
+        target_recall = float(train_cfg.get("target_recall", 0.90))
+        chosen_threshold, best = threshold_for_target_recall(
+            val_full["labels"], val_full["probs"], target_recall=target_recall
+        )
+        score_value = float(best["recall"])
+    else:
+        _, best = threshold_sweep(
+            val_full["labels"], val_full["probs"], metric=metric_name
+        )
+        chosen_threshold = float(best["threshold"])
+        score_value = float(best.get(metric_name, best["f1"]))
     meta.update(
         {
             "tuned": True,
-            "threshold": float(best["threshold"]),
+            "threshold": chosen_threshold,
             "threshold_metric": metric_name,
-            "val_score_at_threshold": float(best.get(metric_name, best["f1"])),
+            "val_score_at_threshold": score_value,
             "val_metrics_at_threshold": _metrics_summary(best),
         }
     )
-    print(
-        f"Threshold tuning on val: {metric_name}={meta['val_score_at_threshold']:.3f} "
-        f"at threshold={meta['threshold']:.2f}"
-    )
+    if metric_name == "recall_target":
+        print(
+            f"Threshold tuning on val: recall={score_value:.3f} "
+            f"(target {train_cfg.get('target_recall', 0.90)}) "
+            f"at threshold={meta['threshold']:.2f}"
+        )
+    else:
+        print(
+            f"Threshold tuning on val: {metric_name}={score_value:.3f} "
+            f"at threshold={meta['threshold']:.2f}"
+        )
     return meta["threshold"], meta
 
 
