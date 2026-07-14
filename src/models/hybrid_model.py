@@ -31,6 +31,8 @@ class HybridBreastCancerModel(nn.Module):
         entanglement: str = "linear",
         quantum_feature_norm: bool = True,
         quantum_full_readout: bool = True,
+        quantum_backend: str | None = None,
+        quantum_diff_method: str | None = None,
         use_modality_tokens: bool = True,
         use_transformer: bool = True,
         use_quantum: bool = True,
@@ -71,6 +73,8 @@ class HybridBreastCancerModel(nn.Module):
                 entanglement=entanglement,
                 feature_norm=quantum_feature_norm,
                 full_readout=quantum_full_readout,
+                backend=quantum_backend,
+                diff_method=quantum_diff_method,
             )
         else:
             self.head = self.classical_head

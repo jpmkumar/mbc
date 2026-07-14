@@ -21,12 +21,17 @@ def configure_runtime(config: dict) -> dict:
 
     num_workers = int(data_cfg.get("num_workers", 0))
     if data_cfg.get("auto_num_workers", True):
-        # Colab and many laptops: >2 workers often stalls or warns
-        num_workers = min(num_workers, 2)
+        # Kaggle T4 gives ~4 CPU cores; cap there to avoid oversubscription.
+        num_workers = min(num_workers, 4)
 
     use_amp = bool(train_cfg.get("use_amp", True)) and torch.cuda.is_available()
     cache_batch_size = int(
         train_cfg.get("feature_cache_batch_size", train_cfg.get("batch_size", 16) * 2)
+    )
+
+    # channels_last only helps cuDNN conv kernels; neutral/harmful elsewhere.
+    channels_last = (
+        bool(train_cfg.get("channels_last", True)) and torch.cuda.is_available()
     )
 
     return {
@@ -34,6 +39,7 @@ def configure_runtime(config: dict) -> dict:
         "use_amp": use_amp,
         "cache_batch_size": cache_batch_size,
         "prefetch_factor": int(data_cfg.get("prefetch_factor", 2)),
+        "channels_last": channels_last,
     }
 
 

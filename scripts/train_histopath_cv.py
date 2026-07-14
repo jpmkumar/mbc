@@ -130,6 +130,8 @@ def _build_model(config: dict, experiment: str):
         entanglement=quantum_cfg.get("entanglement", "linear"),
         quantum_feature_norm=quantum_cfg.get("feature_norm", True),
         quantum_full_readout=quantum_cfg.get("full_readout", True),
+        quantum_backend=quantum_cfg.get("backend"),
+        quantum_diff_method=quantum_cfg.get("diff_method"),
     )
 
 

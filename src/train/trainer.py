@@ -104,6 +104,10 @@ class HybridTrainer:
             self.amp_device_type, enabled=self.use_amp
         )
         self.cache_batch_size = runtime["cache_batch_size"]
+        self.use_channels_last = runtime.get("channels_last", False)
+        if self.use_channels_last:
+            self.model = self.model.to(memory_format=torch.channels_last)
+            print("channels_last memory format enabled")
         if self.use_amp:
             print(f"Mixed precision (AMP) enabled on {self.amp_device_type}")
 
@@ -357,6 +361,8 @@ class HybridTrainer:
             return self.model.forward_from_features(features), labels
 
         images = batch["image"].to(self.classical_device, non_blocking=True)
+        if self.use_channels_last:
+            images = images.contiguous(memory_format=torch.channels_last)
         labels = batch["label"].to(self.classical_device, non_blocking=True)
         modality_ids = batch["modality_id"].to(
             self.classical_device, non_blocking=True
@@ -445,6 +451,8 @@ class HybridTrainer:
 
         for batch in loader:
             images = batch["image"].to(self.classical_device, non_blocking=True)
+            if self.use_channels_last:
+                images = images.contiguous(memory_format=torch.channels_last)
             labels = batch["label"].to(self.classical_device, non_blocking=True)
             modality_ids = batch["modality_id"].to(
                 self.classical_device, non_blocking=True
