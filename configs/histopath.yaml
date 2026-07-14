@@ -17,6 +17,15 @@ data:
     histopath:
       grayscale: false
       clahe: false
+  # Fuller augmentation lifts the PR curve (both precision & recall).
+  # strong=true adds vertical flips, full 90-deg rotations, and
+  # saturation/hue jitter to cover H&E stain variation.
+  augmentation:
+    strong: true
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.1
+    hue: 0.05
 
 model:
   encoder: "efficientnet_b0"
@@ -54,13 +63,22 @@ training:
   selection_metric: balanced_accuracy
   use_class_weights: true
   malignant_weight_multiplier: 1.0
+  # loss: focal focuses training on hard/ambiguous patches (improves both
+  # precision and recall under imbalance). Set loss: ce for weighted CE.
+  loss: focal
+  focal_gamma: 2.0
   eval_threshold: 0.5
   tune_threshold: true
-  # threshold_metric: f1 balances precision/recall (cutoff often ~0.8).
-  # For higher sensitivity, use recall_target: pick the highest val threshold
-  # that still reaches target_recall (clinically defensible for cancer screening).
-  threshold_metric: recall_target
+  # Threshold policy options:
+  #   f1           -> balances precision/recall equally
+  #   fbeta        -> F-beta; beta>1 leans toward recall (see fbeta_beta)
+  #   recall_target-> highest threshold reaching target_recall (max sensitivity)
+  # fbeta with beta=1.5 keeps precision respectable while favoring recall.
+  threshold_metric: fbeta
+  fbeta_beta: 1.5
   target_recall: 0.90
+  # Test-time augmentation: average predictions over flips/rotations.
+  tta: true
   early_stopping_patience: 5
   grad_clip_norm: 1.0
   val_ratio: 0.1

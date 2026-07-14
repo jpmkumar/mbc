@@ -19,6 +19,7 @@ def create_dataloaders(
     data_root: str | None = None,
     max_samples: int | None = None,
     max_eval_samples: int | None = None,
+    augment_config: dict | None = None,
 ):
     train_modality = modality_filter[0] if modality_filter and len(modality_filter) == 1 else None
     loader_kwargs = {}
@@ -31,7 +32,11 @@ def create_dataloaders(
         if split_name not in ("train", "val", "test"):
             continue
         if split_name == "train" and not eval_train_transforms:
-            transform = get_train_transforms(image_size, modality=train_modality)
+            transform = get_train_transforms(
+                image_size,
+                modality=train_modality,
+                augment_config=augment_config,
+            )
         else:
             transform = get_eval_transforms(image_size)
         limit = max_samples if split_name == "train" else max_eval_samples

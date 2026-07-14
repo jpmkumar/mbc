@@ -45,6 +45,7 @@ def _resolve_eval_threshold(
     val_loader,
     device,
     train_cfg: dict,
+    tta: bool = False,
 ) -> tuple[float, dict]:
     """Pick a decision threshold on validation only (real-world safe)."""
     default_threshold = float(train_cfg.get("eval_threshold", 0.5))
@@ -57,7 +58,9 @@ def _resolve_eval_threshold(
     if not train_cfg.get("tune_threshold", False):
         return default_threshold, meta
 
-    val_full = evaluate_model(model, val_loader, device, threshold=default_threshold)
+    val_full = evaluate_model(
+        model, val_loader, device, threshold=default_threshold, tta=tta
+    )
     metric_name = str(train_cfg.get("threshold_metric", "f1"))
     if metric_name == "recall_target":
         target_recall = float(train_cfg.get("target_recall", 0.90))
@@ -65,6 +68,13 @@ def _resolve_eval_threshold(
             val_full["labels"], val_full["probs"], target_recall=target_recall
         )
         score_value = float(best["recall"])
+    elif metric_name == "fbeta":
+        beta = float(train_cfg.get("fbeta_beta", 1.5))
+        _, best = threshold_sweep(
+            val_full["labels"], val_full["probs"], metric="fbeta", beta=beta
+        )
+        chosen_threshold = float(best["threshold"])
+        score_value = float(best["fbeta"])
     else:
         _, best = threshold_sweep(
             val_full["labels"], val_full["probs"], metric=metric_name
@@ -87,8 +97,13 @@ def _resolve_eval_threshold(
             f"at threshold={meta['threshold']:.2f}"
         )
     else:
+        label = (
+            f"fbeta(beta={train_cfg.get('fbeta_beta', 1.5)})"
+            if metric_name == "fbeta"
+            else metric_name
+        )
         print(
-            f"Threshold tuning on val: {metric_name}={score_value:.3f} "
+            f"Threshold tuning on val: {label}={score_value:.3f} "
             f"at threshold={meta['threshold']:.2f}"
         )
     return meta["threshold"], meta
@@ -168,6 +183,7 @@ def _run_fold(
     train_cfg = config["training"]
     data_cfg = config["data"]
 
+    augment_config = data_cfg.get("augmentation")
     loaders = create_dataloaders(
         splits,
         batch_size=train_cfg["batch_size"],
@@ -179,6 +195,7 @@ def _run_fold(
         data_root=str(archive_path),
         max_samples=max_samples,
         max_eval_samples=max_eval_samples,
+        augment_config=augment_config,
     )
 
     use_hybrid = experiment in ("E3", "hybrid")
@@ -226,18 +243,21 @@ def _run_fold(
             trainer.stage_a_epochs = 2
 
     train_metrics = trainer.train()
+    use_tta = bool(train_cfg.get("tta", False))
     threshold, threshold_meta = _resolve_eval_threshold(
         model,
         loaders["val"],
         str(trainer.device),
         train_cfg,
+        tta=use_tta,
     )
     test_metrics = evaluate_model(
-        model, loaders["test"], trainer.device, threshold=threshold
+        model, loaders["test"], trainer.device, threshold=threshold, tta=use_tta
     )
     summary = _metrics_summary(test_metrics)
     summary["threshold"] = threshold
-    return {
+    threshold_meta["tta"] = use_tta
+    result = {
         "fold": fold,
         "experiment": experiment,
         "seed": seed,
@@ -245,6 +265,11 @@ def _run_fold(
         "test_metrics": summary,
         "threshold_tuning": threshold_meta,
     }
+    if use_hybrid:
+        result["n_qubits"] = int(
+            config.get("model", {}).get("quantum", {}).get("n_qubits", 8)
+        )
+    return result
 
 
 def _friedman_summary(results_by_model: dict[str, list[float]]) -> dict:
@@ -305,6 +330,12 @@ def main():
         default="data/splits/histopath",
         help="Directory containing patient_stats.csv and folds/",
     )
+    parser.add_argument(
+        "--n-qubits",
+        type=int,
+        default=None,
+        help="Override quantum.n_qubits (E3 ablation, e.g. 4/8/12)",
+    )
     args = parser.parse_args()
 
     splits_dir = ROOT / args.splits_dir
@@ -317,6 +348,15 @@ def main():
     archive_path = resolve_archive_path(args.archive_path, splits_dir)
     with open(ROOT / args.config) as f:
         config = yaml.safe_load(f)
+
+    if args.n_qubits is not None:
+        config.setdefault("model", {}).setdefault("quantum", {})[
+            "n_qubits"
+        ] = args.n_qubits
+        # Tag the run so ablation checkpoints/summaries don't collide.
+        suffix = config.setdefault("project", {}).get("experiment_suffix", "")
+        config["project"]["experiment_suffix"] = f"{suffix}_q{args.n_qubits}"
+        print(f"Quantum ablation: n_qubits override = {args.n_qubits}")
 
     folds = load_histopath_folds(splits_dir)
     fold_ids = [args.fold] if args.fold is not None else [item["fold"] for item in folds]

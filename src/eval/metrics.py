@@ -11,12 +11,25 @@ from sklearn.metrics import (
 )
 
 
+def _tta_views(images: torch.Tensor):
+    """Symmetry-preserving views for histopath patches (flips + 90-deg rots)."""
+    return [
+        images,
+        torch.flip(images, dims=[3]),          # horizontal flip
+        torch.flip(images, dims=[2]),          # vertical flip
+        torch.rot90(images, k=1, dims=[2, 3]),  # 90 deg
+        torch.rot90(images, k=2, dims=[2, 3]),  # 180 deg
+        torch.rot90(images, k=3, dims=[2, 3]),  # 270 deg
+    ]
+
+
 @torch.no_grad()
 def evaluate_model(
     model: nn.Module,
     loader,
     device: str,
     threshold: float = 0.5,
+    tta: bool = False,
 ) -> dict:
     model.eval()
     all_labels, all_probs = [], []
@@ -25,8 +38,17 @@ def evaluate_model(
         images = batch["image"].to(device)
         labels = batch["label"].to(device)
         modality_ids = batch["modality_id"].to(device)
-        logits = model(images, modality_ids)
-        probs = torch.softmax(logits.float(), dim=1)
+
+        if tta:
+            prob_sum = None
+            for view in _tta_views(images):
+                logits = model(view, modality_ids)
+                p = torch.softmax(logits.float(), dim=1)
+                prob_sum = p if prob_sum is None else prob_sum + p
+            probs = prob_sum / len(_tta_views(images))
+        else:
+            logits = model(images, modality_ids)
+            probs = torch.softmax(logits.float(), dim=1)
 
         all_labels.extend(labels.cpu().numpy())
         all_probs.extend(probs[:, 1].cpu().numpy())

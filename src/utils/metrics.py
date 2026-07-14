@@ -3,9 +3,11 @@
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     balanced_accuracy_score,
     confusion_matrix,
     f1_score,
+    fbeta_score,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -39,6 +41,11 @@ def compute_metrics(all_labels, all_preds, all_probs) -> dict:
         metrics["roc"] = {"fpr": fpr.tolist(), "tpr": tpr.tolist()}
     except ValueError:
         metrics["auc"] = 0.0
+    # AUPRC (average precision) is the honest curve summary under imbalance.
+    try:
+        metrics["auprc"] = float(average_precision_score(all_labels, all_probs))
+    except ValueError:
+        metrics["auprc"] = 0.0
     return metrics
 
 
@@ -56,8 +63,13 @@ def threshold_sweep(
     probs,
     metric: str = "balanced_accuracy",
     thresholds: np.ndarray | None = None,
+    beta: float = 1.0,
 ) -> tuple[list[dict], dict]:
-    """Try many cutoffs; return all rows and the best row for `metric`."""
+    """Try many cutoffs; return all rows and the best row for `metric`.
+
+    ``metric='fbeta'`` selects the threshold maximizing F-beta, where
+    beta>1 weights recall more than precision (beta=2 => recall 2x).
+    """
     thresholds = (
         thresholds
         if thresholds is not None
@@ -66,6 +78,11 @@ def threshold_sweep(
     rows = []
     for threshold in thresholds:
         row = compute_metrics_at_threshold(labels, probs, float(threshold))
+        if metric == "fbeta":
+            preds = preds_from_threshold(probs, float(threshold))
+            row["fbeta"] = float(
+                fbeta_score(labels, preds, beta=beta, zero_division=0)
+            )
         rows.append(row)
 
     def score(row: dict) -> float:
@@ -73,6 +90,8 @@ def threshold_sweep(
             return row["recall"]
         if metric == "f1":
             return row["f1"]
+        if metric == "fbeta":
+            return row["fbeta"]
         return row.get(metric, row["balanced_accuracy"])
 
     best = max(rows, key=score)

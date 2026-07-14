@@ -15,7 +15,7 @@ from src.utils.metrics import compute_metrics
 
 from .accelerator import amp_device_type, configure_runtime, maybe_compile_model
 from .feature_cache import build_feature_loader, extract_compressed_features
-from .losses import compute_class_weights
+from .losses import FocalLoss, compute_class_weights
 
 
 def filter_compatible_state_dict(
@@ -109,14 +109,22 @@ class HybridTrainer:
 
         use_weights = train_cfg.get("use_class_weights", True)
         malignant_mult = float(train_cfg.get("malignant_weight_multiplier", 1.0))
+        weights = None
         if use_weights:
             weights = compute_class_weights(
                 train_loader,
                 malignant_multiplier=malignant_mult,
             ).to(self.classical_device)
-            self.criterion = nn.CrossEntropyLoss(weight=weights)
+
+        loss_type = str(train_cfg.get("loss", "ce")).lower()
+        if loss_type == "focal":
+            gamma = float(train_cfg.get("focal_gamma", 2.0))
+            self.criterion = FocalLoss(gamma=gamma, weight=weights).to(
+                self.classical_device
+            )
+            print(f"Loss: focal (gamma={gamma}, class_weights={use_weights})")
         else:
-            self.criterion = nn.CrossEntropyLoss()
+            self.criterion = nn.CrossEntropyLoss(weight=weights)
 
         self.history = {"train_loss": [], "val_metrics": []}
         self.best_score = -1.0
