@@ -128,11 +128,19 @@ def _build_model(config: dict, experiment: str):
                 "classical_head_hidden", model_cfg["compression_dims"][-1]
             )
         return ClassicalBreastCancerModel(**kwargs)
+    n_qubits = int(quantum_cfg.get("n_qubits", 8))
+    # Keep feature bottleneck matched to qubit width for width ablations.
+    compression_dims = list(kwargs["compression_dims"])
+    if compression_dims[-1] != n_qubits:
+        compression_dims[-1] = n_qubits
+        kwargs["compression_dims"] = compression_dims
     return HybridBreastCancerModel(
         **kwargs,
-        n_qubits=quantum_cfg.get("n_qubits", 8),
+        n_qubits=n_qubits,
         n_vqc_layers=quantum_cfg.get("n_layers", 2),
         entanglement=quantum_cfg.get("entanglement", "linear"),
+        quantum_encoding=quantum_cfg.get("encoding", "angle_y"),
+        quantum_data_reuploading=bool(quantum_cfg.get("data_reuploading", False)),
         quantum_feature_norm=quantum_cfg.get("feature_norm", True),
         quantum_full_readout=quantum_cfg.get("full_readout", True),
         quantum_backend=quantum_cfg.get("backend"),
@@ -273,9 +281,12 @@ def _run_fold(
         "threshold_tuning": threshold_meta,
     }
     if use_hybrid:
-        result["n_qubits"] = int(
-            config.get("model", {}).get("quantum", {}).get("n_qubits", 8)
-        )
+        qcfg = config.get("model", {}).get("quantum", {})
+        result["n_qubits"] = int(qcfg.get("n_qubits", 8))
+        result["n_layers"] = int(qcfg.get("n_layers", 2))
+        result["entanglement"] = str(qcfg.get("entanglement", "linear"))
+        result["encoding"] = str(qcfg.get("encoding", "angle_y"))
+        result["data_reuploading"] = bool(qcfg.get("data_reuploading", False))
     return result
 
 
@@ -301,6 +312,55 @@ def _friedman_summary(results_by_model: dict[str, list[float]]) -> dict:
         summary[f"{model}_mean"] = float(np.mean(scores))
         summary[f"{model}_std"] = float(np.std(scores, ddof=0))
     return summary
+
+
+def _append_experiment_suffix(config: dict, tag: str):
+    """Append a tag so ablation checkpoints/summaries don't collide."""
+    project = config.setdefault("project", {})
+    suffix = project.get("experiment_suffix", "") or ""
+    project["experiment_suffix"] = f"{suffix}_{tag}"
+
+
+def _apply_quantum_ablation_overrides(config: dict, args) -> None:
+    """Apply CLI expressivity overrides and tag the run suffix."""
+    model = config.setdefault("model", {})
+    qcfg = model.setdefault("quantum", {})
+    overrides: list[str] = []
+
+    if getattr(args, "n_qubits", None) is not None:
+        qcfg["n_qubits"] = args.n_qubits
+        # Keep compression bottleneck matched to qubit width.
+        dims = list(model.get("compression_dims") or [128, 32, 8])
+        dims[-1] = args.n_qubits
+        model["compression_dims"] = dims
+        _append_experiment_suffix(config, f"q{args.n_qubits}")
+        overrides.append(f"n_qubits={args.n_qubits}")
+
+    if getattr(args, "n_layers", None) is not None:
+        qcfg["n_layers"] = args.n_layers
+        _append_experiment_suffix(config, f"L{args.n_layers}")
+        overrides.append(f"n_layers={args.n_layers}")
+
+    if getattr(args, "entanglement", None) is not None:
+        qcfg["entanglement"] = args.entanglement
+        _append_experiment_suffix(config, f"ent{args.entanglement}")
+        overrides.append(f"entanglement={args.entanglement}")
+
+    if getattr(args, "encoding", None) is not None:
+        qcfg["encoding"] = args.encoding
+        # Short tag: angle_y -> ay
+        enc_tag = args.encoding.replace("angle_", "a")
+        _append_experiment_suffix(config, f"enc{enc_tag}")
+        overrides.append(f"encoding={args.encoding}")
+
+    if getattr(args, "data_reuploading", None) is not None:
+        qcfg["data_reuploading"] = bool(args.data_reuploading)
+        tag = "reup1" if args.data_reuploading else "reup0"
+        _append_experiment_suffix(config, tag)
+        overrides.append(f"data_reuploading={bool(args.data_reuploading)}")
+
+    if overrides:
+        print("Quantum expressivity ablation: " + ", ".join(overrides))
 
 
 def main():
@@ -349,6 +409,37 @@ def main():
         default=None,
         help="Override quantum.n_qubits (E3 ablation, e.g. 4/8/12)",
     )
+    parser.add_argument(
+        "--n-layers",
+        type=int,
+        default=None,
+        help="Override quantum.n_layers (ansatz depth ablation, e.g. 1/2/4)",
+    )
+    parser.add_argument(
+        "--entanglement",
+        default=None,
+        choices=["none", "linear", "circular"],
+        help="Override quantum.entanglement (none isolates no-CNOT baseline)",
+    )
+    parser.add_argument(
+        "--encoding",
+        default=None,
+        choices=["angle_x", "angle_y", "angle_z"],
+        help="Override quantum.encoding (angle embedding rotation axis)",
+    )
+    parser.add_argument(
+        "--data-reuploading",
+        dest="data_reuploading",
+        action="store_true",
+        default=None,
+        help="Enable data re-uploading (encode before each ansatz layer)",
+    )
+    parser.add_argument(
+        "--no-data-reuploading",
+        dest="data_reuploading",
+        action="store_false",
+        help="Disable data re-uploading (encode once; default)",
+    )
     args = parser.parse_args()
 
     splits_dir = ROOT / args.splits_dir
@@ -362,15 +453,7 @@ def main():
     with open(ROOT / args.config) as f:
         config = yaml.safe_load(f)
 
-    if args.n_qubits is not None:
-        config.setdefault("model", {}).setdefault("quantum", {})[
-            "n_qubits"
-        ] = args.n_qubits
-        # Tag the run so ablation checkpoints/summaries don't collide.
-        suffix = config.setdefault("project", {}).get("experiment_suffix", "")
-        config["project"]["experiment_suffix"] = f"{suffix}_q{args.n_qubits}"
-        print(f"Quantum ablation: n_qubits override = {args.n_qubits}")
-
+    _apply_quantum_ablation_overrides(config, args)
     folds = load_histopath_folds(splits_dir)
     fold_ids = [args.fold] if args.fold is not None else [item["fold"] for item in folds]
     val_ratio = float(config.get("training", {}).get("val_ratio", 0.1))

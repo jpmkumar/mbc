@@ -1,10 +1,27 @@
-"""Variational Quantum Circuit head — Benedetti et al. (2019) aligned design."""
+"""Variational Quantum Circuit head — Benedetti et al. (2019) aligned design.
+
+Expressivity ablations (CLI / config):
+- entanglement: none | linear | circular
+- n_layers: ansatz depth
+- encoding: angle_x | angle_y | angle_z
+- data_reuploading: encode once (False) or before each layer (True)
+"""
 
 import math
 
 import pennylane as qml
 import torch
 import torch.nn as nn
+
+ENCODING_ROTATION = {
+    "angle_x": "X",
+    "angle_y": "Y",
+    "angle_z": "Z",
+    # Aliases
+    "x": "X",
+    "y": "Y",
+    "z": "Z",
+}
 
 
 class AngleEncoder(nn.Module):
@@ -14,25 +31,69 @@ class AngleEncoder(nn.Module):
         return torch.sigmoid(x) * math.pi
 
 
+def _apply_entanglement(n_qubits: int, entanglement: str):
+    if entanglement in (None, "none", "no", "off"):
+        return
+    if entanglement == "linear":
+        for q in range(n_qubits - 1):
+            qml.CNOT(wires=[q, q + 1])
+        return
+    if entanglement == "circular":
+        for q in range(n_qubits - 1):
+            qml.CNOT(wires=[q, q + 1])
+        if n_qubits > 1:
+            qml.CNOT(wires=[n_qubits - 1, 0])
+        return
+    raise ValueError(
+        f"Unknown entanglement={entanglement!r}. "
+        "Use none|linear|circular."
+    )
+
+
+def _apply_encoding(inputs, n_qubits: int, encoding: str):
+    key = encoding.lower()
+    if key not in ENCODING_ROTATION:
+        raise ValueError(
+            f"Unknown encoding={encoding!r}. "
+            f"Use one of: {sorted(set(ENCODING_ROTATION))}."
+        )
+    qml.AngleEmbedding(
+        inputs, wires=range(n_qubits), rotation=ENCODING_ROTATION[key]
+    )
+
+
+def _variational_layer(weights_layer, n_qubits: int, entanglement: str):
+    for q in range(n_qubits):
+        qml.RY(weights_layer[q, 0], wires=q)
+        qml.RZ(weights_layer[q, 1], wires=q)
+    _apply_entanglement(n_qubits, entanglement)
+
+
 def _circuit_definition(
     inputs,
     weights,
     n_qubits: int,
     n_layers: int,
     entanglement: str,
+    encoding: str = "angle_y",
+    data_reuploading: bool = False,
 ):
-    qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
-    for layer in range(n_layers):
-        for q in range(n_qubits):
-            qml.RY(weights[layer, q, 0], wires=q)
-            qml.RZ(weights[layer, q, 1], wires=q)
-        if entanglement == "linear":
-            for q in range(n_qubits - 1):
-                qml.CNOT(wires=[q, q + 1])
-        elif entanglement == "circular":
-            for q in range(n_qubits - 1):
-                qml.CNOT(wires=[q, q + 1])
-            qml.CNOT(wires=[n_qubits - 1, 0])
+    """Hardware-efficient ansatz with optional data re-uploading.
+
+    Standard (data_reuploading=False):
+        encode once -> [RY/RZ + entangle] x n_layers
+
+    Re-uploading (data_reuploading=True; Pérez-Salinas et al.):
+        for each layer: encode -> RY/RZ + entangle
+    """
+    if data_reuploading:
+        for layer in range(n_layers):
+            _apply_encoding(inputs, n_qubits, encoding)
+            _variational_layer(weights[layer], n_qubits, entanglement)
+    else:
+        _apply_encoding(inputs, n_qubits, encoding)
+        for layer in range(n_layers):
+            _variational_layer(weights[layer], n_qubits, entanglement)
     return [qml.expval(qml.PauliZ(q)) for q in range(n_qubits)]
 
 
@@ -40,10 +101,12 @@ def build_vqc_layer(
     n_qubits: int,
     n_layers: int,
     entanglement: str = "linear",
+    encoding: str = "angle_y",
+    data_reuploading: bool = False,
     backend: str | None = None,
     diff_method: str | None = None,
 ):
-    """Hardware-efficient variational circuit (RY, RZ, linear CNOT).
+    """Hardware-efficient variational circuit (RY, RZ, optional CNOT).
 
     Backend order matters for speed. Benchmarked at 8 qubits, batch 64:
     default.qubit+backprop is ~7x faster than lightning.qubit+adjoint
@@ -68,18 +131,28 @@ def build_vqc_layer(
             pass
 
     last_error: Exception | None = None
-    for dev_name, diff_method in attempts:
+    for dev_name, diff in attempts:
         try:
             dev = qml.device(dev_name, wires=n_qubits)
 
-            @qml.qnode(dev, interface="torch", diff_method=diff_method)
+            @qml.qnode(dev, interface="torch", diff_method=diff)
             def circuit(inputs, weights):
                 return _circuit_definition(
-                    inputs, weights, n_qubits, n_layers, entanglement
+                    inputs,
+                    weights,
+                    n_qubits,
+                    n_layers,
+                    entanglement,
+                    encoding=encoding,
+                    data_reuploading=data_reuploading,
                 )
 
             layer = qml.qnn.TorchLayer(circuit, weight_shapes)
-            print(f"VQC backend: {dev_name} ({diff_method})")
+            print(
+                f"VQC backend: {dev_name} ({diff}) | "
+                f"enc={encoding} ent={entanglement} "
+                f"L={n_layers} reup={data_reuploading}"
+            )
             return layer
         except Exception as exc:
             last_error = exc
@@ -95,8 +168,8 @@ class VQCHead(nn.Module):
     """
     Quantum head with:
     - LayerNorm on compressed features (classical pre-encoding)
-    - Angle encoding
-    - Shallow hardware-efficient ansatz
+    - Angle encoding (axis configurable)
+    - Shallow hardware-efficient ansatz (+ optional data re-uploading)
     - Full qubit readout + linear classifier
     """
 
@@ -106,6 +179,8 @@ class VQCHead(nn.Module):
         n_layers: int = 2,
         num_classes: int = 2,
         entanglement: str = "linear",
+        encoding: str = "angle_y",
+        data_reuploading: bool = False,
         feature_norm: bool = True,
         full_readout: bool = True,
         backend: str | None = None,
@@ -113,10 +188,20 @@ class VQCHead(nn.Module):
     ):
         super().__init__()
         self.n_qubits = n_qubits
+        self.encoding = encoding
+        self.data_reuploading = data_reuploading
+        self.entanglement = entanglement
+        self.n_layers = n_layers
         self.feature_norm = nn.LayerNorm(n_qubits) if feature_norm else nn.Identity()
         self.angle_encoder = AngleEncoder()
         self.quantum_layer = build_vqc_layer(
-            n_qubits, n_layers, entanglement, backend=backend, diff_method=diff_method
+            n_qubits,
+            n_layers,
+            entanglement,
+            encoding=encoding,
+            data_reuploading=data_reuploading,
+            backend=backend,
+            diff_method=diff_method,
         )
         readout_dim = n_qubits if full_readout else min(n_qubits, 2)
         self.classifier = nn.Linear(readout_dim, num_classes)

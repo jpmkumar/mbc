@@ -46,7 +46,9 @@ model:
   quantum:
     n_qubits: 8
     n_layers: 2
-    entanglement: "linear"
+    entanglement: "linear"   # none | linear | circular
+    encoding: "angle_y"      # angle_x | angle_y | angle_z
+    data_reuploading: false  # encode once vs before each ansatz layer
     # default.qubit+backprop vectorizes the batch (~7x faster than
     # lightning.qubit+adjoint at 8 qubits). Override for large-qubit runs.
     backend: "default.qubit"
