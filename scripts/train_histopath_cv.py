@@ -121,7 +121,12 @@ def _build_model(config: dict, experiment: str):
         transformer_layers=model_cfg["transformer"]["num_layers"],
         transformer_heads=model_cfg["transformer"]["num_heads"],
     )
-    if experiment in ("E2", "classical"):
+    if experiment in ("E2", "classical", "E2b"):
+        if experiment == "E2b":
+            kwargs["classical_head_type"] = "mlp"
+            kwargs["classical_head_hidden"] = model_cfg.get(
+                "classical_head_hidden", model_cfg["compression_dims"][-1]
+            )
         return ClassicalBreastCancerModel(**kwargs)
     return HybridBreastCancerModel(
         **kwargs,
@@ -205,7 +210,7 @@ def _run_fold(
     suffix = config.get("project", {}).get("experiment_suffix", "")
     exp_name = (
         f"{experiment}_histopath_fold{fold}{suffix}_seed{seed}"
-        if experiment in ("E2", "E3")
+        if experiment in ("E2", "E2b", "E3")
         else f"{experiment}_fold{fold}{suffix}_seed{seed}"
     )
 
@@ -304,9 +309,15 @@ def main():
     parser.add_argument(
         "--experiment",
         default="E2",
-        choices=["E2", "E3", "classical", "hybrid"],
+        choices=["E2", "E2b", "E3", "classical", "hybrid"],
+        help="E2=linear classical head, E2b=param-matched classical MLP head, E3=VQC head",
     )
     parser.add_argument("--compare-classical", action="store_true")
+    parser.add_argument(
+        "--compare-heads",
+        action="store_true",
+        help="Run E2 (linear), E2b (matched classical MLP), E3 (VQC) for a 3-way head comparison",
+    )
     parser.add_argument("--fold", type=int, default=None, help="Run one fold only")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--quick", action="store_true")
@@ -364,7 +375,12 @@ def main():
     fold_ids = [args.fold] if args.fold is not None else [item["fold"] for item in folds]
     val_ratio = float(config.get("training", {}).get("val_ratio", 0.1))
 
-    experiments = ["E2", "E3"] if args.compare_classical else [args.experiment]
+    if args.compare_heads:
+        experiments = ["E2", "E2b", "E3"]
+    elif args.compare_classical:
+        experiments = ["E2", "E3"]
+    else:
+        experiments = [args.experiment]
     all_results = {exp: [] for exp in experiments}
     friedman_input = {exp: [] for exp in experiments}
     max_eval_samples = args.max_eval_samples

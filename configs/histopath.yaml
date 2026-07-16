@@ -39,6 +39,10 @@ model:
   compression_dims: [128, 32, 8]
   num_modality_tokens: 1
   num_classes: 2
+  # E2b control head: classical MLP (LayerNorm -> Linear -> GELU -> Linear)
+  # matched in structure/capacity to the VQC head. hidden defaults to the
+  # last compression dim (8), giving it >= the VQC head's parameters.
+  classical_head_hidden: 8
   quantum:
     n_qubits: 8
     n_layers: 2

@@ -11,6 +11,30 @@ from .transformer import ModalityTransformerEncoder
 from .vqc import VQCHead
 
 
+class ClassicalMLPHead(nn.Module):
+    """Classical control head that mirrors the VQC head's structure.
+
+    Uses LayerNorm + a non-linear MLP (matching the VQC's LayerNorm +
+    non-linear quantum transform + linear classifier), with equal or
+    greater capacity than the VQC head. If the VQC still outperforms this
+    head, any advantage cannot be attributed merely to extra parameters or
+    non-linearity — isolating the genuine quantum contribution.
+    """
+
+    def __init__(self, in_dim: int, num_classes: int, hidden: int | None = None):
+        super().__init__()
+        hidden = hidden or in_dim
+        self.net = nn.Sequential(
+            nn.LayerNorm(in_dim),
+            nn.Linear(in_dim, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
 class HybridBreastCancerModel(nn.Module):
     """
     Modality-Level Generalized Hybrid Quantum Framework.
@@ -33,6 +57,8 @@ class HybridBreastCancerModel(nn.Module):
         quantum_full_readout: bool = True,
         quantum_backend: str | None = None,
         quantum_diff_method: str | None = None,
+        classical_head_type: str = "linear",
+        classical_head_hidden: int | None = None,
         use_modality_tokens: bool = True,
         use_transformer: bool = True,
         use_quantum: bool = True,
@@ -64,7 +90,12 @@ class HybridBreastCancerModel(nn.Module):
         )
 
         qubit_dim = compression_dims[-1]
-        self.classical_head = nn.Linear(qubit_dim, num_classes)
+        if classical_head_type == "mlp":
+            self.classical_head = ClassicalMLPHead(
+                qubit_dim, num_classes, hidden=classical_head_hidden or qubit_dim
+            )
+        else:
+            self.classical_head = nn.Linear(qubit_dim, num_classes)
         if use_quantum:
             self.head = VQCHead(
                 n_qubits=n_qubits,
