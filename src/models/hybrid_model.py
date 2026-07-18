@@ -38,7 +38,13 @@ class ClassicalMLPHead(nn.Module):
 class HybridBreastCancerModel(nn.Module):
     """
     Modality-Level Generalized Hybrid Quantum Framework.
-    EfficientNet-B0 -> Transformer -> Compression -> VQC -> Classification
+    EfficientNet-B0 -> Transformer -> Compression -> head(s)
+
+    Head modes:
+    - classical only (use_quantum=False): linear or MLP
+    - quantum swap (use_quantum=True, use_fusion=False): VQC replaces classical
+    - fusion (use_fusion=True): classical MLP + VQC logits mixed by alpha
+      fused = alpha * logits_classical + (1 - alpha) * logits_vqc
     """
 
     def __init__(
@@ -64,12 +70,17 @@ class HybridBreastCancerModel(nn.Module):
         use_modality_tokens: bool = True,
         use_transformer: bool = True,
         use_quantum: bool = True,
+        use_fusion: bool = False,
+        fusion_alpha: float | None = None,
+        fusion_init_alpha: float = 0.5,
     ):
         super().__init__()
         compression_dims = compression_dims or [128, 32, 8]
         self.use_modality_tokens = use_modality_tokens
         self.use_transformer = use_transformer
-        self.use_quantum = use_quantum
+        # Fusion implies a quantum path; keep use_quantum True for trainer stages.
+        self.use_fusion = bool(use_fusion)
+        self.use_quantum = bool(use_quantum) or self.use_fusion
 
         self.encoder = EfficientNetEncoder(output_dim=encoder_dim)
         self.feature_proj = nn.Linear(encoder_dim, projection_dim)
@@ -92,13 +103,16 @@ class HybridBreastCancerModel(nn.Module):
         )
 
         qubit_dim = compression_dims[-1]
-        if classical_head_type == "mlp":
+        # Fusion always uses the matched MLP classical branch (E2b-style).
+        head_type = "mlp" if self.use_fusion else classical_head_type
+        if head_type == "mlp":
             self.classical_head = ClassicalMLPHead(
                 qubit_dim, num_classes, hidden=classical_head_hidden or qubit_dim
             )
         else:
             self.classical_head = nn.Linear(qubit_dim, num_classes)
-        if use_quantum:
+
+        if self.use_quantum:
             self.head = VQCHead(
                 n_qubits=n_qubits,
                 n_layers=n_vqc_layers,
@@ -115,10 +129,25 @@ class HybridBreastCancerModel(nn.Module):
             self.head = self.classical_head
 
         self.n_qubits = n_qubits
-        self._use_classical_head = not use_quantum
+        self._use_classical_head = not self.use_quantum
+        # When True (stage C / eval for E4), mix classical + VQC logits.
+        self._fusion_active = False
         self._backbone_frozen = False
         self.classical_device = torch.device("cpu")
         self.quantum_device = torch.device("cpu")
+
+        self._fusion_fixed_alpha: float | None = None
+        if self.use_fusion:
+            if fusion_alpha is not None:
+                self._fusion_fixed_alpha = float(fusion_alpha)
+                self.fusion_logit = None
+            else:
+                init = min(max(float(fusion_init_alpha), 1e-4), 1.0 - 1e-4)
+                # logit(init) so sigmoid(fusion_logit) starts near init_alpha
+                logit = torch.log(torch.tensor(init / (1.0 - init)))
+                self.fusion_logit = nn.Parameter(logit)
+        else:
+            self.fusion_logit = None
 
     def set_devices(self, classical_device, quantum_device=None):
         """Place classical backbone and quantum head on separate devices."""
@@ -133,6 +162,8 @@ class HybridBreastCancerModel(nn.Module):
         ):
             if module is not None:
                 module.to(self.classical_device)
+        if self.fusion_logit is not None:
+            self.fusion_logit.data = self.fusion_logit.data.to(self.classical_device)
         if self.use_quantum:
             self.head.to(self.quantum_device)
 
@@ -175,9 +206,31 @@ class HybridBreastCancerModel(nn.Module):
         return compressed
 
     def set_training_stage(self, stage: str):
-        """Stage A: classical head; Stage B/C: VQC head (hybrid models only)."""
-        if self.use_quantum:
-            self._use_classical_head = stage == "stage_a"
+        """Stage A: classical; Stage B: VQC; Stage C: fused (E4) or VQC (E3)."""
+        if not self.use_quantum:
+            self._use_classical_head = True
+            self._fusion_active = False
+            return
+        if stage == "stage_a":
+            self._use_classical_head = True
+            self._fusion_active = False
+        elif stage == "stage_b":
+            self._use_classical_head = False
+            self._fusion_active = False
+        else:
+            # stage_c / eval: fuse when E4, else VQC-only (E3)
+            self._use_classical_head = False
+            self._fusion_active = self.use_fusion
+
+    def get_fusion_alpha(self) -> float:
+        """Current classical mixing weight in [0, 1] (1 = all classical)."""
+        if not self.use_fusion:
+            return 0.0
+        if self._fusion_fixed_alpha is not None:
+            return float(self._fusion_fixed_alpha)
+        if self.fusion_logit is None:
+            return 0.5
+        return float(torch.sigmoid(self.fusion_logit.detach()).cpu())
 
     def set_backbone_trainable(self, trainable: bool):
         """Freeze or unfreeze encoder, transformer, and compression."""
@@ -197,14 +250,36 @@ class HybridBreastCancerModel(nn.Module):
         for param in self.head.parameters():
             param.requires_grad = trainable
 
+    def set_fusion_trainable(self, trainable: bool):
+        if self.fusion_logit is not None:
+            self.fusion_logit.requires_grad = trainable
+
     def forward_from_features(self, compressed: torch.Tensor) -> torch.Tensor:
         """Classify pre-compressed features (Stage B feature cache path)."""
+        x_c = compressed.to(self.classical_device)
+
         if self.use_quantum and self._use_classical_head:
-            return self.classical_head(compressed.to(self.classical_device))
+            return self.classical_head(x_c)
+
+        if self.use_quantum and self._fusion_active and self.use_fusion:
+            logits_c = self.classical_head(x_c)
+            logits_q = self.head(compressed.to(self.quantum_device)).to(
+                self.classical_device
+            )
+            if self._fusion_fixed_alpha is not None:
+                alpha = torch.tensor(
+                    self._fusion_fixed_alpha, device=logits_c.device, dtype=logits_c.dtype
+                )
+            else:
+                alpha = torch.sigmoid(self.fusion_logit).to(
+                    device=logits_c.device, dtype=logits_c.dtype
+                )
+            return alpha * logits_c + (1.0 - alpha) * logits_q
+
         if self.use_quantum:
             logits = self.head(compressed.to(self.quantum_device))
             return logits.to(self.classical_device)
-        return self.head(compressed.to(self.classical_device))
+        return self.head(x_c)
 
     def forward(
         self,
@@ -227,4 +302,5 @@ class ClassicalBreastCancerModel(HybridBreastCancerModel):
 
     def __init__(self, **kwargs):
         kwargs["use_quantum"] = False
+        kwargs["use_fusion"] = False
         super().__init__(**kwargs)

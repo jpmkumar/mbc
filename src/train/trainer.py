@@ -231,6 +231,8 @@ class HybridTrainer:
             self.model.set_backbone_trainable(True)
             self.model.set_classical_head_trainable(True)
             self.model.set_vqc_head_trainable(False)
+            if hasattr(self.model, "set_fusion_trainable"):
+                self.model.set_fusion_trainable(False)
             if hasattr(self.model, "set_backbone_eval_mode"):
                 self.model.set_backbone_eval_mode(False)
         elif stage == "stage_b":
@@ -238,6 +240,8 @@ class HybridTrainer:
             self.model.set_backbone_trainable(not freeze_backbone)
             self.model.set_classical_head_trainable(False)
             self.model.set_vqc_head_trainable(True)
+            if hasattr(self.model, "set_fusion_trainable"):
+                self.model.set_fusion_trainable(False)
             if hasattr(self.model, "set_backbone_eval_mode"):
                 self.model.set_backbone_eval_mode(
                     freeze_backbone and self.backbone_eval_in_stage_b
@@ -246,8 +250,15 @@ class HybridTrainer:
             if hasattr(self.model, "set_backbone_eval_mode"):
                 self.model.set_backbone_eval_mode(False)
             self.model.set_backbone_trainable(True)
-            self.model.set_classical_head_trainable(False)
-            self.model.set_vqc_head_trainable(True)
+            # E4 fusion: jointly fine-tune classical MLP + VQC + mixing weight.
+            if getattr(self.model, "use_fusion", False):
+                self.model.set_classical_head_trainable(True)
+                self.model.set_vqc_head_trainable(True)
+                if hasattr(self.model, "set_fusion_trainable"):
+                    self.model.set_fusion_trainable(True)
+            else:
+                self.model.set_classical_head_trainable(False)
+                self.model.set_vqc_head_trainable(True)
         self._feature_loaders.clear()
 
     def _should_cache_features(self, stage: str) -> bool:

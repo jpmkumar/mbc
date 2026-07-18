@@ -43,6 +43,12 @@ model:
   # matched in structure/capacity to the VQC head. hidden defaults to the
   # last compression dim (8), giving it >= the VQC head's parameters.
   classical_head_hidden: 8
+  # E4 fusion head: classical MLP + VQC logits mixed by alpha
+  # (alpha=1 all classical, alpha=0 all quantum). alpha=null → learnable.
+  fusion:
+    enabled: false
+    alpha: null
+    init_alpha: 0.5
   quantum:
     n_qubits: 8
     n_layers: 2

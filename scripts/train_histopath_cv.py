@@ -134,6 +134,11 @@ def _build_model(config: dict, experiment: str):
     if compression_dims[-1] != n_qubits:
         compression_dims[-1] = n_qubits
         kwargs["compression_dims"] = compression_dims
+    fusion_cfg = model_cfg.get("fusion", {})
+    use_fusion = experiment in ("E4", "fusion") or bool(fusion_cfg.get("enabled", False))
+    fusion_alpha = fusion_cfg.get("alpha", None)
+    if fusion_alpha is not None:
+        fusion_alpha = float(fusion_alpha)
     return HybridBreastCancerModel(
         **kwargs,
         n_qubits=n_qubits,
@@ -145,6 +150,14 @@ def _build_model(config: dict, experiment: str):
         quantum_full_readout=quantum_cfg.get("full_readout", True),
         quantum_backend=quantum_cfg.get("backend"),
         quantum_diff_method=quantum_cfg.get("diff_method"),
+        # Fusion uses the matched MLP classical branch (same as E2b).
+        classical_head_type="mlp" if use_fusion else "linear",
+        classical_head_hidden=model_cfg.get(
+            "classical_head_hidden", compression_dims[-1]
+        ),
+        use_fusion=use_fusion,
+        fusion_alpha=fusion_alpha,
+        fusion_init_alpha=float(fusion_cfg.get("init_alpha", 0.5)),
     )
 
 
@@ -213,12 +226,12 @@ def _run_fold(
         augment_config=augment_config,
     )
 
-    use_hybrid = experiment in ("E3", "hybrid")
+    use_hybrid = experiment in ("E3", "hybrid", "E4", "fusion")
     model = _build_model(config, experiment)
     suffix = config.get("project", {}).get("experiment_suffix", "")
     exp_name = (
         f"{experiment}_histopath_fold{fold}{suffix}_seed{seed}"
-        if experiment in ("E2", "E2b", "E3")
+        if experiment in ("E2", "E2b", "E3", "E4")
         else f"{experiment}_fold{fold}{suffix}_seed{seed}"
     )
 
@@ -258,6 +271,12 @@ def _run_fold(
             trainer.stage_a_epochs = 2
 
     train_metrics = trainer.train()
+    # E4: final eval always uses the fused head (both branches + alpha).
+    if getattr(model, "use_fusion", False) and hasattr(model, "set_training_stage"):
+        model.set_training_stage("stage_c")
+        if hasattr(model, "get_fusion_alpha"):
+            print(f"Fusion alpha (classical weight) = {model.get_fusion_alpha():.4f}")
+
     use_tta = bool(train_cfg.get("tta", False))
     threshold, threshold_meta = _resolve_eval_threshold(
         model,
@@ -287,8 +306,9 @@ def _run_fold(
         result["entanglement"] = str(qcfg.get("entanglement", "linear"))
         result["encoding"] = str(qcfg.get("encoding", "angle_y"))
         result["data_reuploading"] = bool(qcfg.get("data_reuploading", False))
+    if getattr(model, "use_fusion", False) and hasattr(model, "get_fusion_alpha"):
+        result["fusion_alpha"] = float(model.get_fusion_alpha())
     return result
-
 
 def _friedman_summary(results_by_model: dict[str, list[float]]) -> dict:
     models = list(results_by_model.keys())
@@ -369,14 +389,23 @@ def main():
     parser.add_argument(
         "--experiment",
         default="E2",
-        choices=["E2", "E2b", "E3", "classical", "hybrid"],
-        help="E2=linear classical head, E2b=param-matched classical MLP head, E3=VQC head",
+        choices=["E2", "E2b", "E3", "E4", "classical", "hybrid", "fusion"],
+        help=(
+            "E2=linear classical, E2b=matched classical MLP, E3=VQC swap, "
+            "E4=fusion (MLP+VQC mixed by alpha)"
+        ),
     )
     parser.add_argument("--compare-classical", action="store_true")
     parser.add_argument(
         "--compare-heads",
         action="store_true",
         help="Run E2 (linear), E2b (matched classical MLP), E3 (VQC) for a 3-way head comparison",
+    )
+    parser.add_argument(
+        "--fusion-alpha",
+        type=float,
+        default=None,
+        help="Fix E4 classical mixing weight in [0,1] (omit to learn alpha)",
     )
     parser.add_argument("--fold", type=int, default=None, help="Run one fold only")
     parser.add_argument("--seed", type=int, default=42)
@@ -454,6 +483,12 @@ def main():
         config = yaml.safe_load(f)
 
     _apply_quantum_ablation_overrides(config, args)
+    if args.fusion_alpha is not None:
+        config.setdefault("model", {}).setdefault("fusion", {})["alpha"] = float(
+            args.fusion_alpha
+        )
+        _append_experiment_suffix(config, f"fa{args.fusion_alpha:g}")
+        print(f"Fusion: fixed alpha={args.fusion_alpha}")
     folds = load_histopath_folds(splits_dir)
     fold_ids = [args.fold] if args.fold is not None else [item["fold"] for item in folds]
     val_ratio = float(config.get("training", {}).get("val_ratio", 0.1))
