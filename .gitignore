@@ -38,6 +38,8 @@ scripts/generate_manuscript_docx.py
 **/agent-transcripts/
 **/*_QML_REPORT*.md
 **/*viva*.md
+GPU_PROJECT_PLAN.md
+**/*PROJECT_PLAN*.md
 
 # LaTeX build
 paper/*.aux

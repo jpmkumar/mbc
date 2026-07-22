@@ -6,6 +6,8 @@ Use these in `paper/main.tex` or submission portal.
 |------|-------------------|
 | `fig1_architecture.png` | Modality-Level Generalized Hybrid Quantum Framework. Input from any single modality receives a learnable token, passes through EfficientNet-B0 and a Transformer encoder, is compressed to eight dimensions, and is classified by a classical head (Stage A) or variational quantum circuit head (Stage B). |
 | `fig_training_stages.png` | Two-stage hybrid training protocol: Stage A trains the classical head; Stage B freezes the backbone and trains the VQC head; optional Stage C performs joint fine-tuning. |
+| `fig_stage_a_layers.png` | **Stage A layer diagram.** Vertical stack from input image through modality token, EfficientNet-B0, Transformer, compression MLP (2048→128→32→8), and classical linear head — all layers trainable. |
+| `fig_stage_b_layers.png` | **Stage B layer diagram.** Frozen Stage A backbone; trainable LayerNorm, angle encoding, 8-qubit VQC (2 layers, linear CNOT), Pauli-Z readout, and linear classifier. |
 | `fig_mammo_metrics_comparison.png` | CBIS-DDSM test-set comparison ($n=445$): (a) balanced accuracy, recall, and precision; (b) F1 and AUC across baseline and enhanced configurations. |
 | `fig_confusion_matrices.png` | Confusion matrices on CBIS-DDSM test set: (a) enhanced Stage A (recommended model); (b) enhanced Stage B VQC ablation. |
 | `fig_dataset_splits.png` | CBIS-DDSM mammography ROI dataset: train/validation/test split sizes (70/15/15). |

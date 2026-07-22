@@ -8,11 +8,12 @@ Everything needed to compile the IEEE Access manuscript and reproduce figures/ta
 # 1. Regenerate all figures and LaTeX tables from canonical metrics
 python scripts/generate_publication.py
 
-# 2. Compile PDF (from repo root)
+# 2. Compile IEEE LaTeX PDF (from repo root)
 make -C paper pdf
 
-# 3. Or manually
-cd paper && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+# 3. Build journal-neutral Word manuscript (any journal)
+make -C paper docx
+# Output: paper/manuscript.docx
 ```
 
 ## Canonical results source
@@ -28,12 +29,19 @@ Edit **`publication/publication_metrics.json`** when new experiments finish, the
 
 ## Files for manuscript
 
-### LaTeX
+### LaTeX (IEEE Access)
 | Path | Purpose |
 |------|---------|
-| `paper/main.tex` | Main IEEE Access draft |
+| `paper/main.tex` | IEEE-formatted LaTeX draft |
 | `paper/references.bib` | Bibliography |
 | `publication/tables/publication_tables.tex` | Tables I–III (auto-generated) |
+
+### Word (journal-neutral — edit for any venue)
+| Path | Purpose |
+|------|---------|
+| `paper/manuscript.docx` | **Editable Word manuscript** (figures + tables embedded) |
+| `paper/manuscript_neutral.md` | Source markdown (regenerate docx after edits) |
+| `scripts/generate_manuscript_docx.py` | Build script (`make -C paper docx`) |
 
 ### Figures (300 DPI PNG)
 | File | Label | Section |

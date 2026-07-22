@@ -6,7 +6,6 @@
 \usepackage{cite}
 \usepackage{hyperref}
 \usepackage{booktabs}
-\usepackage{multirow}
 
 \begin{document}
 
@@ -76,6 +75,22 @@ Fig.~\ref{fig:stages} summarizes the protocol from EQML pilot findings~\cite{eqm
 \includegraphics[width=\linewidth]{fig_training_stages.png}
 \caption{Two-stage hybrid training: Stage~A (classical), Stage~B (VQC), optional Stage~C (joint).}
 \label{fig:stages}
+\end{figure}
+
+Fig.~\ref{fig:stage_a_layers} and Fig.~\ref{fig:stage_b_layers} detail the layer stacks trained in each stage.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.92\linewidth]{fig_stage_a_layers.png}
+\caption{Stage~A layer architecture: all backbone and classical head layers are trainable.}
+\label{fig:stage_a_layers}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.92\linewidth]{fig_stage_b_layers.png}
+\caption{Stage~B layer architecture: frozen Stage~A backbone with trainable VQC head.}
+\label{fig:stage_b_layers}
 \end{figure}
 
 \section{Experimental Setup}

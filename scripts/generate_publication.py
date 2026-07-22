@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -236,6 +237,221 @@ def plot_pilot_vs_imaging(data: dict, out: Path):
     plt.close(fig)
 
 
+def _draw_layer_diagram(
+    out: Path,
+    filename: str,
+    title: str,
+    layers: list[tuple[str, str, str]],
+    legend_note: str,
+):
+    """Draw a vertical layer stack diagram.
+
+    Each layer: (name, detail, state) where state is trainable|frozen|output.
+    """
+    state_style = {
+        "trainable": ("#e8f8f0", "#27ae60", "solid"),
+        "frozen": ("#f0f0f0", "#7f8c8d", "dashed"),
+        "output": ("#eaf2fb", "#2980b9", "solid"),
+    }
+
+    n = len(layers)
+    fig_h = max(7.5, 0.72 * n + 1.8)
+    fig, ax = plt.subplots(figsize=(8.5, fig_h))
+    ax.axis("off")
+
+    box_w, box_h = 0.78, 0.52
+    x0 = 0.11
+    y_top = 0.92
+    gap = 0.08
+
+    ax.text(
+        0.5,
+        0.985,
+        title,
+        ha="center",
+        va="top",
+        fontsize=13,
+        fontweight="bold",
+    )
+
+    for i, (name, detail, state) in enumerate(layers):
+        y = y_top - i * (box_h + gap)
+        face, edge, linestyle = state_style.get(state, state_style["trainable"])
+        patch = FancyBboxPatch(
+            (x0, y - box_h),
+            box_w,
+            box_h,
+            boxstyle="round,pad=0.012,rounding_size=0.015",
+            linewidth=1.8,
+            edgecolor=edge,
+            facecolor=face,
+            linestyle=linestyle,
+        )
+        ax.add_patch(patch)
+        ax.text(
+            x0 + box_w / 2,
+            y - box_h / 2 + 0.07,
+            name,
+            ha="center",
+            va="center",
+            fontsize=10.5,
+            fontweight="bold",
+        )
+        ax.text(
+            x0 + box_w / 2,
+            y - box_h / 2 - 0.08,
+            detail,
+            ha="center",
+            va="center",
+            fontsize=8.5,
+            color="#333333",
+        )
+        if state == "trainable":
+            tag = "TRAINABLE"
+            tag_color = "#27ae60"
+        elif state == "frozen":
+            tag = "FROZEN"
+            tag_color = "#7f8c8d"
+        else:
+            tag = "OUTPUT"
+            tag_color = "#2980b9"
+        ax.text(
+            x0 + box_w - 0.02,
+            y - 0.03,
+            tag,
+            ha="right",
+            va="top",
+            fontsize=7,
+            color=tag_color,
+            fontweight="bold",
+        )
+
+        if i < n - 1:
+            ax.add_patch(
+                FancyArrowPatch(
+                    (x0 + box_w / 2, y - box_h - 0.005),
+                    (x0 + box_w / 2, y - box_h - gap + 0.005),
+                    arrowstyle="-|>",
+                    mutation_scale=12,
+                    linewidth=1.4,
+                    color="#444444",
+                )
+            )
+
+    ax.text(0.5, 0.04, legend_note, ha="center", va="bottom", fontsize=8.5, style="italic")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    fig.savefig(out / filename, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_stage_layer_diagrams(out: Path):
+    """Stage A and Stage B layer architecture diagrams (separate figures)."""
+    shared_backbone = [
+        (
+            "Input Image",
+            "224×224 grayscale + CLAHE preprocessing",
+            "trainable",
+        ),
+        (
+            "Modality Token Embedding",
+            "[MAMMO] / [ULTRA] / [THERMO] learnable tokens",
+            "trainable",
+        ),
+        (
+            "EfficientNet-B0 Encoder",
+            "ImageNet-pretrained CNN → 1280-D feature vector",
+            "trainable",
+        ),
+        (
+            "Modality Transformer Encoder",
+            "2 layers, 4 heads, token + feature → 2048-D",
+            "trainable",
+        ),
+        (
+            "Feature Compression MLP",
+            "Linear+LayerNorm+ReLU+Dropout: 2048 → 128 → 32 → 8",
+            "trainable",
+        ),
+    ]
+
+    stage_a_layers = shared_backbone + [
+        (
+            "Classical Linear Head",
+            "Fully connected 8 → 2 (benign / malignant)",
+            "trainable",
+        ),
+        (
+            "Classification Output",
+            "Softmax probabilities — Stage A deployment head",
+            "output",
+        ),
+    ]
+
+    stage_b_layers = [
+        (
+            "Input Image",
+            "224×224 grayscale + CLAHE preprocessing",
+            "frozen",
+        ),
+        (
+            "Modality Token Embedding",
+            "[MAMMO] / [ULTRA] / [THERMO] tokens (Stage A weights)",
+            "frozen",
+        ),
+        (
+            "EfficientNet-B0 Encoder",
+            "1280-D features — backbone frozen in Stage B",
+            "frozen",
+        ),
+        (
+            "Modality Transformer Encoder",
+            "2048-D representation — weights frozen",
+            "frozen",
+        ),
+        (
+            "Feature Compression MLP",
+            "2048 → 128 → 32 → 8 — weights frozen",
+            "frozen",
+        ),
+        (
+            "LayerNorm + Angle Encoding",
+            "Normalize 8-D features; sigmoid × π → rotation angles",
+            "trainable",
+        ),
+        (
+            "Variational Quantum Circuit (VQC)",
+            "8 qubits, 2 ansatz layers; RY/RZ + linear CNOT entanglement",
+            "trainable",
+        ),
+        (
+            "Pauli-Z Readout + Linear Classifier",
+            "8 expectation values → linear 8 → 2 logits",
+            "trainable",
+        ),
+        (
+            "Classification Output",
+            "Softmax probabilities — Stage B VQC head",
+            "output",
+        ),
+    ]
+
+    _draw_layer_diagram(
+        out,
+        "fig_stage_a_layers.png",
+        "Stage A — Classical Hybrid Layer Stack (all backbone + head trainable)",
+        stage_a_layers,
+        "Stage A trains EfficientNet, Transformer, compression MLP, and classical head.",
+    )
+    _draw_layer_diagram(
+        out,
+        "fig_stage_b_layers.png",
+        "Stage B — VQC Layer Stack (frozen backbone + trainable quantum head)",
+        stage_b_layers,
+        "Stage B freezes Stage A backbone; only LayerNorm, VQC ansatz, and classifier train.",
+    )
+
+
 def plot_training_pipeline(out: Path):
     """Two-stage training schematic."""
     fig, ax = plt.subplots(figsize=(10, 2.2))
@@ -391,6 +607,8 @@ Confusion matrix: TN={cm[0][0]}, FP={cm[0][1]}, FN={cm[1][0]}, TP={cm[1][1]}
 | `figures/fig_dataset_splits.png` | Experimental setup |
 | `figures/fig_pilot_vs_imaging.png` | Discussion — pilot bridge |
 | `figures/fig_training_stages.png` | Method — training strategy |
+| `figures/fig_stage_a_layers.png` | Method — Stage A layer stack |
+| `figures/fig_stage_b_layers.png` | Method — Stage B layer stack |
 
 ## LaTeX
 
@@ -424,6 +642,7 @@ def main():
     plot_dataset_splits(data, FIG_DIR)
     plot_pilot_vs_imaging(data, FIG_DIR)
     plot_training_pipeline(FIG_DIR)
+    plot_stage_layer_diagrams(FIG_DIR)
     write_latex_tables(data, TABLE_DIR)
     write_markdown_summary(data, ROOT / "publication")
 
