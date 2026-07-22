@@ -703,6 +703,49 @@ After `git pull`, folds 2+ use these automatically. Re-run fold 0–1 only if yo
 
 ---
 
+## Export fold-0 test probabilities (Fig.7 ROC/PR)
+
+Training metrics JSON **drops** `labels`/`probs`. To plot ROC/PR overlays, re-infer once with the best checkpoints (no retrain).
+
+**Requirements:** IDC image input attached, fold-0 `E2` / `E2b` / `E3` best `.pt` files (from downloaded result zips), and `data/splits/histopath` present.
+
+**Cell — export NPZ (TTA on, matches paper eval)**
+
+```python
+%cd /kaggle/working/mbc
+!git pull
+
+# Point these at your extracted fold-0 best checkpoints (not *_latest.pt)
+E2_CKPT  = "/kaggle/working/mbc/results/.../E2_histopath_fold0_histopath_seed42.pt"
+E2B_CKPT = "/kaggle/working/mbc/results/.../E2b_histopath_fold0_histopath_seed42.pt"
+E3_CKPT  = "/kaggle/working/mbc/results/.../E3_histopath_fold0_histopath_seed42.pt"
+ARCHIVE  = "/kaggle/input/breast-histopathology-images"  # or your resolved path
+
+!python scripts/export_histopath_fold_probs.py \
+  --config configs/histopath.yaml \
+  --fold 0 \
+  --archive-path "{ARCHIVE}" \
+  --splits-dir data/splits/histopath \
+  --out-dir results/fold0_probs \
+  --arm E2={E2_CKPT} \
+  --arm E2b={E2B_CKPT} \
+  --arm E3={E3_CKPT} \
+  --tta \
+  --reuse-runtime-splits
+
+!ls -lh results/fold0_probs/
+# Download results/fold0_probs/*.npz to the Mac, then plot Fig.7 locally.
+```
+
+Outputs per arm:
+
+- `fold0_<ARM>_test_probs.npz` — arrays `labels`, `probs` (P(IDC+)), `threshold`, `tta`, `best_stage`
+- `fold0_<ARM>_test_probs_summary.json` — AUC/AUPRC sanity check vs reported fold-0 metrics
+
+E3 uses `best_stage` from the checkpoint (paper runs: `stage_a`). Expect tens of minutes per arm on T4 with TTA.
+
+---
+
 ## E2 reference results (completed folds)
 
 | Fold | Balanced accuracy | F1 | AUC | Threshold | Notes |
