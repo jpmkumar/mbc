@@ -65,18 +65,30 @@ def _load_checkpoint(model, ckpt_path: Path) -> dict:
 
 
 def _setup_device(model, config: dict) -> torch.device:
+    """Place model on GPU when available and keep classical_device in sync.
+
+    HybridBreastCancerModel.forward() moves inputs to ``self.classical_device``.
+    Calling only ``model.to(cuda)`` leaves that attribute on CPU and causes
+    ``Input type (torch.FloatTensor) and weight type (torch.cuda.FloatTensor)``.
+    """
     train_cfg = config.get("training", {})
-    if getattr(model, "use_quantum", False) and hasattr(model, "set_devices"):
+    requested = str(train_cfg.get("classical_device", "auto")).lower()
+    if requested in ("auto", "gpu", "cuda") or (
+        requested == "cpu" and torch.cuda.is_available()
+    ):
+        # histopath.yaml defaults classical_device=cpu for training; export prefers GPU.
         classical = "cuda" if torch.cuda.is_available() else "cpu"
-        classical = train_cfg.get("classical_device", classical)
-        if classical == "auto":
-            classical = "cuda" if torch.cuda.is_available() else "cpu"
-        quantum = train_cfg.get("quantum_device", "cpu")
+    else:
+        classical = requested
+    quantum = train_cfg.get("quantum_device", "cpu")
+    if hasattr(model, "set_devices"):
         model.set_devices(classical, quantum)
-        return torch.device(classical)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    return device
+    else:
+        model.to(torch.device(classical))
+    if hasattr(model, "classical_device"):
+        model.classical_device = torch.device(classical)
+    print(f"  device: classical={classical} quantum={quantum}")
+    return torch.device(classical)
 
 
 def _scalar_metrics(labels: np.ndarray, probs: np.ndarray, threshold: float) -> dict:
@@ -137,6 +149,8 @@ def export_arm(
     model = _build_model(config, arm)
     device = _setup_device(model, config)
     meta = _load_checkpoint(model, ckpt_path)
+    # Re-apply devices after load (state_dict load must not leave attrs stale).
+    device = _setup_device(model, config)
     model.eval()
 
     stage = meta["best_stage"]
