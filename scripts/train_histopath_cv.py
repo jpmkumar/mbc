@@ -207,6 +207,12 @@ def _run_fold(
     max_eval_samples: int | None = None,
 ) -> dict:
     set_seed(seed + fold)
+    config["run"] = {
+        "experiment": experiment,
+        "fold": int(fold),
+        "seed": int(seed),
+        "effective_seed": int(seed + fold),
+    }
     runtime = configure_runtime(config)
     train_cfg = config["training"]
     data_cfg = config["data"]
