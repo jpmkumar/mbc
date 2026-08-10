@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.models.hybrid_model import ClassicalMLPHead  # noqa: E402
 from src.models.vqc import VQCHead  # noqa: E402
-from src.utils.metrics import compute_metrics  # noqa: E402
+from src.utils.metrics import compute_metrics, compute_metrics_at_threshold  # noqa: E402
 
 
 MODEL_NAMES = ("linear", "mlp", "vqc")
@@ -66,6 +67,19 @@ def subset_from_cache(
     indices = balanced_indices(labels, per_class=per_class, seed=seed)
     features = cached_split["features"][indices].float()
     return features, labels[indices], indices
+
+
+def feature_diagnostics(features: torch.Tensor) -> dict:
+    centered = features.float() - features.float().mean(dim=0, keepdim=True)
+    standard_deviations = features.float().std(dim=0, unbiased=False)
+    constant = torch.where(standard_deviations < 1e-8)[0]
+    return {
+        "effective_rank": int(torch.linalg.matrix_rank(centered)),
+        "feature_dimension": int(features.shape[1]),
+        "constant_dimension_indices": constant.tolist(),
+        "constant_dimension_count": int(len(constant)),
+        "per_dimension_std": standard_deviations.tolist(),
+    }
 
 
 def make_loader(
@@ -119,15 +133,67 @@ def evaluate(
 ) -> dict:
     model.eval()
     labels_all, preds_all, probs_all = [], [], []
+    loss_sum = 0.0
     for features, labels in loader:
         features = features.to(device)
         logits = model(features).float()
         probabilities = torch.softmax(logits, dim=1)
         predictions = logits.argmax(dim=1)
+        loss_sum += float(
+            F.cross_entropy(
+                logits,
+                labels.to(device),
+                reduction="sum",
+            )
+        )
         labels_all.extend(labels.numpy())
         preds_all.extend(predictions.cpu().numpy())
         probs_all.extend(probabilities[:, 1].cpu().numpy())
-    return compute_metrics(labels_all, preds_all, probs_all)
+    metrics = compute_metrics(labels_all, preds_all, probs_all)
+    tuned = _optimal_balanced_threshold(labels_all, probs_all)
+    metrics["cross_entropy"] = loss_sum / max(len(labels_all), 1)
+    metrics["tuned_threshold"] = tuned["threshold"]
+    metrics["tuned_accuracy"] = tuned["accuracy"]
+    metrics["tuned_balanced_accuracy"] = tuned["balanced_accuracy"]
+    metrics["tuned_precision"] = tuned["precision"]
+    metrics["tuned_recall"] = tuned["recall"]
+    metrics["tuned_f1"] = tuned["f1"]
+    metrics["tuned_pred_positive_rate"] = tuned["pred_positive_rate"]
+    return metrics
+
+
+def _optimal_balanced_threshold(labels, probs) -> dict:
+    """Find the exact train threshold maximizing balanced accuracy."""
+    probabilities = np.asarray(probs, dtype=float)
+    unique = np.unique(probabilities)
+    if len(unique) == 1:
+        candidates = np.array(
+            [
+                np.nextafter(unique[0], -np.inf),
+                unique[0],
+                np.nextafter(unique[0], np.inf),
+            ]
+        )
+    else:
+        midpoints = (unique[:-1] + unique[1:]) / 2.0
+        candidates = np.concatenate(
+            (
+                [np.nextafter(unique[0], -np.inf)],
+                midpoints,
+                [np.nextafter(unique[-1], np.inf)],
+            )
+        )
+    rows = [
+        compute_metrics_at_threshold(labels, probabilities, float(threshold))
+        for threshold in candidates
+    ]
+    return max(
+        rows,
+        key=lambda row: (
+            row["balanced_accuracy"],
+            -abs(row["threshold"] - 0.5),
+        ),
+    )
 
 
 def _trainable_vector(model: nn.Module) -> torch.Tensor:
@@ -281,51 +347,89 @@ def train_one(
 
     history = []
     best_train_score = -math.inf
+    best_tuned_score = -math.inf
+    best_auc = -math.inf
+    best_loss = math.inf
     best_val_score = -math.inf
-    best_state = None
-    successful_epochs = 0
+    best_train_state = None
+    best_tuned_state = None
+    best_auc_state = None
+    best_loss_state = None
+    successful_evaluations = 0
     started = time.time()
 
-    for epoch in range(1, args.epochs + 1):
+    steps_per_epoch = max(len(train_loader), 1)
+    total_steps = (
+        int(args.max_steps)
+        if args.max_steps > 0
+        else int(args.epochs) * steps_per_epoch
+    )
+    eval_every_steps = (
+        int(args.eval_every_steps)
+        if args.eval_every_steps > 0
+        else steps_per_epoch
+    )
+    train_iterator = iter(train_loader)
+    interval_before = _trainable_vector(model)
+    interval_loss = 0.0
+    interval_gradient_rows = []
+    interval_steps = 0
+    optimizer_step = 0
+
+    while optimizer_step < total_steps:
+        try:
+            features, labels = next(train_iterator)
+        except StopIteration:
+            train_iterator = iter(train_loader)
+            features, labels = next(train_iterator)
+
         model.train()
-        before = _trainable_vector(model)
-        epoch_loss = 0.0
-        gradient_rows = []
+        features = features.to(device)
+        labels = labels.to(device)
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(features).float()
+        loss = criterion(logits, labels)
+        if not torch.isfinite(loss):
+            raise RuntimeError(
+                f"Non-finite loss for {model_name}, seed={seed}, "
+                f"optimizer_step={optimizer_step + 1}"
+            )
+        loss.backward()
+        interval_gradient_rows.append(_gradient_stats(model))
+        if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        optimizer.step()
 
-        for features, labels in train_loader:
-            features = features.to(device)
-            labels = labels.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            logits = model(features).float()
-            loss = criterion(logits, labels)
-            if not torch.isfinite(loss):
-                raise RuntimeError(
-                    f"Non-finite loss for {model_name}, seed={seed}, epoch={epoch}"
-                )
-            loss.backward()
-            gradient_rows.append(_gradient_stats(model))
-            if args.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-            optimizer.step()
-            epoch_loss += float(loss.detach())
+        optimizer_step += 1
+        interval_steps += 1
+        interval_loss += float(loss.detach())
+        should_evaluate = (
+            optimizer_step % eval_every_steps == 0
+            or optimizer_step == total_steps
+        )
+        if not should_evaluate:
+            continue
 
+        epoch = math.ceil(optimizer_step / steps_per_epoch)
         after = _trainable_vector(model)
-        update_norm = float(torch.linalg.vector_norm(after - before))
+        update_norm = float(torch.linalg.vector_norm(after - interval_before))
         train_metrics = evaluate(model, train_eval_loader, device)
         val_metrics = evaluate(model, val_loader, device)
         probe = _probe_stats(model, train_features, train_labels, device)
 
         averaged_gradients = {}
-        for key in gradient_rows[0]:
+        for key in interval_gradient_rows[0]:
             averaged_gradients[key] = float(
-                np.mean([row[key] for row in gradient_rows])
+                np.mean([row[key] for row in interval_gradient_rows])
             )
 
         row = {
             "model": model_name,
             "seed": seed,
             "epoch": epoch,
-            "loss": epoch_loss / max(len(train_loader), 1),
+            "optimizer_step": optimizer_step,
+            "steps_since_evaluation": interval_steps,
+            "loss": interval_loss / max(interval_steps, 1),
             "parameter_update_norm": update_norm,
             **averaged_gradients,
             **probe,
@@ -335,63 +439,111 @@ def train_one(
         history.append(row)
 
         train_score = float(train_metrics["balanced_accuracy"])
+        tuned_score = float(train_metrics["tuned_balanced_accuracy"])
+        train_auc = float(train_metrics["auc"])
+        train_loss = float(train_metrics["cross_entropy"])
         val_score = float(val_metrics["balanced_accuracy"])
         if train_score > best_train_score:
             best_train_score = train_score
-            best_state = {
-                key: value.detach().cpu().clone()
-                for key, value in model.state_dict().items()
-            }
+            best_train_state = _snapshot_state(model)
+        if tuned_score > best_tuned_score:
+            best_tuned_score = tuned_score
+            best_tuned_state = _snapshot_state(model)
+        if train_auc > best_auc:
+            best_auc = train_auc
+            best_auc_state = _snapshot_state(model)
+        if train_loss < best_loss:
+            best_loss = train_loss
+            best_loss_state = _snapshot_state(model)
         best_val_score = max(best_val_score, val_score)
 
         print(
-            f"{model_name:6s} seed={seed} epoch={epoch:03d}/{args.epochs} "
+            f"{model_name:6s} seed={seed} "
+            f"step={optimizer_step:04d}/{total_steps} "
             f"loss={row['loss']:.4f} "
-            f"train_bal={train_score:.3f} val_bal={val_score:.3f} "
+            f"train_bal={train_score:.3f} tuned={tuned_score:.3f} "
+            f"auc={train_auc:.3f} val_bal={val_score:.3f} "
             f"pos={train_metrics['pred_positive_rate']:.3f} "
             f"grad={row['all_grad_mean']:.2e} "
             f"update={update_norm:.2e}"
         )
 
-        if train_score >= args.success_train_balanced_accuracy:
-            successful_epochs += 1
+        if tuned_score >= args.success_train_balanced_accuracy:
+            successful_evaluations += 1
         else:
-            successful_epochs = 0
+            successful_evaluations = 0
         if (
             args.stop_after_success > 0
-            and successful_epochs >= args.stop_after_success
+            and successful_evaluations >= args.stop_after_success
         ):
             print(
-                f"{model_name} seed={seed}: trainability target sustained for "
-                f"{args.stop_after_success} epochs; stopping early."
+                f"{model_name} seed={seed}: tuned trainability target "
+                f"sustained for {args.stop_after_success} evaluations; "
+                f"stopping early."
             )
             break
 
-    checkpoint_path = output_dir / f"{model_name}_seed{seed}_best_train.pt"
-    torch.save(
-        {
-            "model_state_dict": best_state,
-            "model": model_name,
-            "seed": seed,
-            "parameter_count": parameter_count,
-            "best_train_balanced_accuracy": best_train_score,
-            "best_val_balanced_accuracy": best_val_score,
-            "config": vars(args),
-        },
-        checkpoint_path,
-    )
+        interval_before = after
+        interval_loss = 0.0
+        interval_gradient_rows = []
+        interval_steps = 0
+
+    final_state = _snapshot_state(model)
+    checkpoint_payload = {
+        "model": model_name,
+        "seed": seed,
+        "parameter_count": parameter_count,
+        "optimizer_steps_completed": optimizer_step,
+        "best_train_balanced_accuracy": best_train_score,
+        "best_train_tuned_balanced_accuracy": best_tuned_score,
+        "best_train_auc": best_auc,
+        "best_train_cross_entropy": best_loss,
+        "best_val_balanced_accuracy": best_val_score,
+        "config": vars(args),
+    }
+    checkpoint_paths = {}
+    states = {
+        "best_train": best_train_state,
+        "best_tuned": best_tuned_state,
+        "best_auc": best_auc_state,
+        "best_loss": best_loss_state,
+        "final": final_state,
+    }
+    for checkpoint_name, state in states.items():
+        path = output_dir / f"{model_name}_seed{seed}_{checkpoint_name}.pt"
+        torch.save(
+            {
+                **checkpoint_payload,
+                "selection": checkpoint_name,
+                "model_state_dict": state,
+            },
+            path,
+        )
+        checkpoint_paths[checkpoint_name] = str(path)
 
     return {
         "model": model_name,
         "seed": seed,
         "parameter_count": parameter_count,
-        "epochs_completed": len(history),
+        "epochs_completed": math.ceil(optimizer_step / steps_per_epoch),
+        "optimizer_steps_completed": optimizer_step,
+        "evaluations_completed": len(history),
         "best_train_balanced_accuracy": best_train_score,
+        "best_train_tuned_balanced_accuracy": best_tuned_score,
+        "best_train_auc": best_auc,
+        "best_train_cross_entropy": best_loss,
         "best_val_balanced_accuracy": best_val_score,
         "final": history[-1],
         "history": history,
-        "checkpoint": str(checkpoint_path),
+        "checkpoints": checkpoint_paths,
         "runtime_s": time.time() - started,
+    }
+
+
+def _snapshot_state(model: nn.Module) -> dict[str, torch.Tensor]:
+    return {
+        key: value.detach().cpu().clone()
+        for key, value in model.state_dict().items()
     }
 
 
@@ -415,8 +567,12 @@ def build_decision(results: list[dict], args) -> dict:
         mlp = by_model_seed.get(("mlp", seed))
         if vqc is None:
             continue
-        vqc_score = vqc["best_train_balanced_accuracy"]
-        mlp_score = mlp["best_train_balanced_accuracy"] if mlp else None
+        vqc_score = vqc["best_train_tuned_balanced_accuracy"]
+        mlp_score = (
+            mlp["best_train_tuned_balanced_accuracy"]
+            if mlp
+            else None
+        )
         reaches_absolute = vqc_score >= args.success_train_balanced_accuracy
         mlp_demonstrates_learnability = (
             mlp_score is not None
@@ -429,8 +585,8 @@ def build_decision(results: list[dict], args) -> dict:
         rows.append(
             {
                 "seed": seed,
-                "vqc_best_train_balanced_accuracy": vqc_score,
-                "mlp_best_train_balanced_accuracy": mlp_score,
+                "vqc_best_train_tuned_balanced_accuracy": vqc_score,
+                "mlp_best_train_tuned_balanced_accuracy": mlp_score,
                 "mlp_demonstrates_learnability": mlp_demonstrates_learnability,
                 "reaches_absolute_target": reaches_absolute,
                 "within_mlp_tolerance": close_to_mlp,
@@ -442,7 +598,7 @@ def build_decision(results: list[dict], args) -> dict:
     passes = sum(bool(row["passes"]) for row in rows)
     return {
         "criterion": (
-            f"VQC train balanced accuracy >= "
+            f"VQC train-tuned balanced accuracy >= "
             f"{args.success_train_balanced_accuracy:.2f}, or within "
             f"{args.mlp_tolerance:.2f} of matched MLP"
         ),
@@ -477,6 +633,18 @@ def parse_args():
     parser.add_argument("--train-per-class", type=int, default=256)
     parser.add_argument("--val-per-class", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=0,
+        help="Fixed optimizer-step budget; 0 uses epochs × loader length.",
+    )
+    parser.add_argument(
+        "--eval-every-steps",
+        type=int,
+        default=0,
+        help="Evaluate every N optimizer steps; 0 evaluates once per epoch.",
+    )
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
@@ -506,7 +674,10 @@ def parse_args():
         "--stop-after-success",
         type=int,
         default=3,
-        help="Stop after the trainability target is sustained for N epochs; 0 disables.",
+        help=(
+            "Stop after the tuned trainability target is sustained for N "
+            "evaluations; 0 disables."
+        ),
     )
     return parser.parse_args()
 
@@ -545,6 +716,12 @@ def main():
         ).tolist(),
         "val_class_counts": torch.bincount(val_labels, minlength=2).tolist(),
         "feature_dim": int(train_features.shape[1]),
+        "selected_train_feature_diagnostics": feature_diagnostics(
+            train_features
+        ),
+        "full_train_feature_diagnostics": feature_diagnostics(
+            cache["train"]["features"].float()
+        ),
     }
     with open(args.output_dir / "sample_manifest.json", "w") as handle:
         json.dump(manifest, handle, indent=2)
@@ -556,7 +733,21 @@ def main():
         f"val={len(val_labels)} {manifest['val_class_counts']} "
         f"features={manifest['feature_dim']}"
     )
-    print(f"  models={args.models} seeds={args.seeds} epochs={args.epochs}")
+    feature_info = manifest["selected_train_feature_diagnostics"]
+    print(
+        f"  effective_rank={feature_info['effective_rank']}/"
+        f"{feature_info['feature_dimension']} "
+        f"constant_dims={feature_info['constant_dimension_indices']}"
+    )
+    budget = (
+        f"max_steps={args.max_steps}"
+        if args.max_steps > 0
+        else f"epochs={args.epochs}"
+    )
+    print(
+        f"  models={args.models} seeds={args.seeds} {budget} "
+        f"eval_every_steps={args.eval_every_steps or 'epoch'}"
+    )
 
     results = []
     for model_name in args.models:

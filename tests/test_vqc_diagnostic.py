@@ -7,7 +7,10 @@ from pathlib import Path
 
 import torch
 
-from scripts.diagnose_histopath_vqc import balanced_indices
+from scripts.diagnose_histopath_vqc import (
+    _optimal_balanced_threshold,
+    balanced_indices,
+)
 
 
 class VQCTrainabilityDiagnosticTests(unittest.TestCase):
@@ -18,6 +21,16 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
 
         torch.testing.assert_close(first, second)
         self.assertEqual(torch.bincount(labels[first], minlength=2).tolist(), [4, 4])
+
+    def test_tuned_threshold_recovers_separation_above_default_boundary(self):
+        tuned = _optimal_balanced_threshold(
+            labels=[0, 0, 1, 1],
+            probs=[0.60, 0.61, 0.80, 0.81],
+        )
+
+        self.assertEqual(tuned["balanced_accuracy"], 1.0)
+        self.assertGreater(tuned["threshold"], 0.61)
+        self.assertLess(tuned["threshold"], 0.80)
 
     def test_cli_writes_manifest_summary_and_epoch_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -58,6 +71,10 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
                     "3",
                     "--epochs",
                     "2",
+                    "--max-steps",
+                    "3",
+                    "--eval-every-steps",
+                    "2",
                     "--batch-size",
                     "4",
                     "--stop-after-success",
@@ -72,12 +89,28 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
             )
             summary = json.loads((output_dir / "summary.json").read_text())
             self.assertEqual(manifest["train_class_counts"], [4, 4])
+            self.assertIn(
+                "effective_rank",
+                manifest["selected_train_feature_diagnostics"],
+            )
             self.assertEqual(len(summary["runs"]), 3)
-            self.assertFalse(summary["decision"]["proceed_to_full_benchmark"])
+            self.assertEqual(
+                {run["optimizer_steps_completed"] for run in summary["runs"]},
+                {3},
+            )
+            self.assertTrue(
+                all(
+                    "best_train_tuned_balanced_accuracy" in run
+                    for run in summary["runs"]
+                )
+            )
             self.assertTrue((output_dir / "epoch_metrics.csv").exists())
             self.assertTrue(
                 (output_dir / "linear_seed42_best_train.pt").exists()
             )
+            self.assertTrue((output_dir / "linear_seed42_best_auc.pt").exists())
+            self.assertTrue((output_dir / "linear_seed42_best_loss.pt").exists())
+            self.assertTrue((output_dir / "linear_seed42_final.pt").exists())
 
 
 if __name__ == "__main__":
