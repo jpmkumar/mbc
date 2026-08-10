@@ -398,7 +398,18 @@ class HybridTrainer:
                 amp_device_type=self.amp_device_type,
             )
 
-        payload = {"train": cached_train, "val": cached_val, "test": cached_test}
+        payload = {
+            "train": cached_train,
+            "val": cached_val,
+            "test": cached_test,
+            "metadata": {
+                "source_stage": "stage_a",
+                "source_checkpoint": str(
+                    self._best_stage_ckpt_path("stage_a")
+                ),
+                **self._checkpoint_metadata(),
+            },
+        }
         torch.save(payload, cache_path)
         print(f"Saved feature cache to {cache_path}")
 
@@ -412,6 +423,29 @@ class HybridTrainer:
             self._feature_loaders["test"] = build_feature_loader(
                 cached_test, self.batch_size, shuffle=False
             )
+
+    def prepare_stage_a_feature_cache(self) -> Path:
+        """Restore the best Stage-A backbone and export frozen features."""
+        if not getattr(self.model, "use_quantum", False):
+            raise ValueError("Stage-A feature caching requires a hybrid model.")
+        stage_record = self.best_by_stage["stage_a"]
+        if stage_record["state_dict"] is None:
+            raise RuntimeError(
+                "No Stage-A checkpoint is available. Train Stage A first."
+            )
+
+        filtered, _ = filter_compatible_state_dict(
+            self.model, stage_record["state_dict"]
+        )
+        self.model.load_state_dict(filtered, strict=False)
+        if hasattr(self.model, "set_training_stage"):
+            self.model.set_training_stage("stage_a")
+        if hasattr(self.model, "set_backbone_eval_mode"):
+            self.model.set_backbone_eval_mode(True)
+
+        self._feature_loaders.clear()
+        self._prepare_feature_loaders("stage_b")
+        return self._feature_cache_path()
 
     def _loader_with_batch_size(
         self, loader: DataLoader, batch_size: int, shuffle: bool = False

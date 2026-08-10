@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import torch
 
@@ -33,8 +34,10 @@ def make_trainer(tmp_path: Path) -> HybridTrainer:
     trainer.experiment_name = "E3_histopath_fold0_seed42"
     trainer.results_dir = tmp_path / "results"
     trainer.ckpt_dir = tmp_path / "checkpoints"
+    trainer.feature_cache_dir = trainer.results_dir / "feature_cache"
     trainer.results_dir.mkdir()
     trainer.ckpt_dir.mkdir()
+    trainer.feature_cache_dir.mkdir()
     trainer.selection_metric = "balanced_accuracy"
     trainer.config = {
         "run": {
@@ -66,6 +69,7 @@ def make_trainer(tmp_path: Path) -> HybridTrainer:
         for index, stage in enumerate(trainer.STAGES, start=1)
     }
     trainer.best_state = trainer.best_by_stage["stage_c"]["state_dict"]
+    trainer._feature_loaders = {}
     trainer.classical_device = torch.device("cpu")
     trainer.stage_a_epochs = 1
     trainer.stage_b_epochs = 1
@@ -82,6 +86,25 @@ def make_trainer(tmp_path: Path) -> HybridTrainer:
 
 
 class StageAttributionTests(unittest.TestCase):
+    def test_stage_a_cache_export_restores_best_stage_a_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trainer = make_trainer(Path(tmp))
+            expected_weight = trainer.model.weight.detach().clone()
+            trainer.model.weight.data.fill_(9.0)
+            trainer.model.set_training_stage("stage_c")
+
+            with mock.patch.object(
+                trainer, "_prepare_feature_loaders"
+            ) as prepare:
+                cache_path = trainer.prepare_stage_a_feature_cache()
+
+            prepare.assert_called_once_with("stage_b")
+            self.assertEqual(trainer.model.stage, "stage_a")
+            torch.testing.assert_close(
+                trainer.model.weight.detach(), expected_weight
+            )
+            self.assertEqual(cache_path, trainer._feature_cache_path())
+
     def test_stage_checkpoint_reloads_identical_route_and_logits(self):
         with tempfile.TemporaryDirectory() as tmp:
             trainer = make_trainer(Path(tmp))

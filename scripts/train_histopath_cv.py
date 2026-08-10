@@ -205,6 +205,7 @@ def _run_fold(
     quick: bool,
     max_samples: int | None,
     max_eval_samples: int | None = None,
+    stage_a_only_cache: bool = False,
 ) -> dict:
     set_seed(seed + fold)
     config["run"] = {
@@ -212,6 +213,7 @@ def _run_fold(
         "fold": int(fold),
         "seed": int(seed),
         "effective_seed": int(seed + fold),
+        "stage_a_only_cache": bool(stage_a_only_cache),
     }
     runtime = configure_runtime(config)
     train_cfg = config["training"]
@@ -276,7 +278,12 @@ def _run_fold(
         if not use_hybrid:
             trainer.stage_a_epochs = 2
 
-    train_metrics = trainer.train()
+    stages_filter = ["stage_a"] if stage_a_only_cache else None
+    train_metrics = trainer.train(stages_filter=stages_filter)
+    feature_cache_path = None
+    if stage_a_only_cache:
+        feature_cache_path = trainer.prepare_stage_a_feature_cache()
+        print(f"Stage-A-only feature cache ready: {feature_cache_path}")
     # E4: final eval always uses the fused head (both branches + alpha).
     if getattr(model, "use_fusion", False) and hasattr(model, "set_training_stage"):
         model.set_training_stage("stage_c")
@@ -304,7 +311,10 @@ def _run_fold(
         "train_metrics": train_metrics,
         "test_metrics": summary,
         "threshold_tuning": threshold_meta,
+        "stage_a_only_cache": bool(stage_a_only_cache),
     }
+    if feature_cache_path is not None:
+        result["feature_cache"] = str(feature_cache_path)
     if use_hybrid:
         qcfg = config.get("model", {}).get("quantum", {})
         result["n_qubits"] = int(qcfg.get("n_qubits", 8))
@@ -417,6 +427,14 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--quick", action="store_true")
     parser.add_argument(
+        "--stage-a-only-cache",
+        action="store_true",
+        help=(
+            "Train only Stage A, restore its best checkpoint, and export "
+            "frozen train/validation/test features without running Stage B/C."
+        ),
+    )
+    parser.add_argument(
         "--max-samples",
         type=int,
         default=None,
@@ -477,6 +495,16 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.stage_a_only_cache and (
+        args.experiment not in ("E3", "hybrid")
+        or args.compare_heads
+        or args.compare_classical
+    ):
+        parser.error(
+            "--stage-a-only-cache requires --experiment E3 (or hybrid) "
+            "without comparison modes."
+        )
+
     splits_dir = ROOT / args.splits_dir
     if not (splits_dir / "patient_stats.csv").exists():
         raise SystemExit(
@@ -527,6 +555,7 @@ def main():
                 args.quick,
                 args.max_samples,
                 max_eval_samples,
+                args.stage_a_only_cache,
             )
             all_results[experiment].append(result)
             friedman_input[experiment].append(result["test_metrics"]["f1"])
