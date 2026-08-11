@@ -9,6 +9,7 @@ import torch
 
 from scripts.diagnose_histopath_vqc import (
     _optimal_balanced_threshold,
+    apply_feature_transform,
     balanced_indices,
 )
 
@@ -31,6 +32,28 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
         self.assertEqual(tuned["balanced_accuracy"], 1.0)
         self.assertGreater(tuned["threshold"], 0.61)
         self.assertLess(tuned["threshold"], 0.80)
+
+    def test_standardization_is_fitted_on_training_cache_only(self):
+        fit = torch.tensor([[0.0, 10.0], [2.0, 14.0]])
+        train = torch.tensor([[1.0, 12.0]])
+        val = torch.tensor([[3.0, 16.0]])
+
+        transformed_train, transformed_val, metadata = (
+            apply_feature_transform(
+                fit,
+                train,
+                val,
+                transform="standardize",
+            )
+        )
+
+        torch.testing.assert_close(
+            transformed_train, torch.tensor([[0.0, 0.0]])
+        )
+        torch.testing.assert_close(
+            transformed_val, torch.tensor([[2.0, 2.0]])
+        )
+        self.assertEqual(metadata["fit_scope"], "full_training_cache")
 
     def test_cli_writes_manifest_summary_and_epoch_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +133,9 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
             )
             self.assertTrue((output_dir / "linear_seed42_best_auc.pt").exists())
             self.assertTrue((output_dir / "linear_seed42_best_loss.pt").exists())
+            self.assertTrue(
+                (output_dir / "linear_seed42_best_val_auprc.pt").exists()
+            )
             self.assertTrue((output_dir / "linear_seed42_final.pt").exists())
 
 

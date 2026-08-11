@@ -82,6 +82,40 @@ def feature_diagnostics(features: torch.Tensor) -> dict:
     }
 
 
+def apply_feature_transform(
+    fit_features: torch.Tensor,
+    train_features: torch.Tensor,
+    val_features: torch.Tensor,
+    transform: str,
+) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    """Fit an unsupervised transform on training features only."""
+    if transform == "raw":
+        return train_features, val_features, {
+            "name": "raw",
+            "fit_scope": "full_training_cache",
+        }
+    if transform != "standardize":
+        raise ValueError(
+            f"Unknown feature transform {transform!r}; use raw|standardize."
+        )
+
+    fit = fit_features.float()
+    mean = fit.mean(dim=0)
+    std = fit.std(dim=0, unbiased=False)
+    safe_std = std.clamp(min=1e-6)
+    return (
+        (train_features.float() - mean) / safe_std,
+        (val_features.float() - mean) / safe_std,
+        {
+            "name": "standardize",
+            "fit_scope": "full_training_cache",
+            "mean": mean.tolist(),
+            "std": std.tolist(),
+            "std_floor": 1e-6,
+        },
+    )
+
+
 def make_loader(
     features: torch.Tensor,
     labels: torch.Tensor,
@@ -351,10 +385,19 @@ def train_one(
     best_auc = -math.inf
     best_loss = math.inf
     best_val_score = -math.inf
+    best_val_tuned_score = -math.inf
+    best_val_auc = -math.inf
+    best_val_auprc = -math.inf
     best_train_state = None
     best_tuned_state = None
     best_auc_state = None
     best_loss_state = None
+    best_val_tuned_state = None
+    best_val_auc_state = None
+    best_val_auprc_state = None
+    best_val_tuned_metrics = None
+    best_val_auc_metrics = None
+    best_val_auprc_metrics = None
     successful_evaluations = 0
     started = time.time()
 
@@ -443,6 +486,9 @@ def train_one(
         train_auc = float(train_metrics["auc"])
         train_loss = float(train_metrics["cross_entropy"])
         val_score = float(val_metrics["balanced_accuracy"])
+        val_tuned_score = float(val_metrics["tuned_balanced_accuracy"])
+        val_auc = float(val_metrics["auc"])
+        val_auprc = float(val_metrics["auprc"])
         if train_score > best_train_score:
             best_train_score = train_score
             best_train_state = _snapshot_state(model)
@@ -456,6 +502,18 @@ def train_one(
             best_loss = train_loss
             best_loss_state = _snapshot_state(model)
         best_val_score = max(best_val_score, val_score)
+        if val_tuned_score > best_val_tuned_score:
+            best_val_tuned_score = val_tuned_score
+            best_val_tuned_state = _snapshot_state(model)
+            best_val_tuned_metrics = _compact_metrics(val_metrics)
+        if val_auc > best_val_auc:
+            best_val_auc = val_auc
+            best_val_auc_state = _snapshot_state(model)
+            best_val_auc_metrics = _compact_metrics(val_metrics)
+        if val_auprc > best_val_auprc:
+            best_val_auprc = val_auprc
+            best_val_auprc_state = _snapshot_state(model)
+            best_val_auprc_metrics = _compact_metrics(val_metrics)
 
         print(
             f"{model_name:6s} seed={seed} "
@@ -499,6 +557,12 @@ def train_one(
         "best_train_auc": best_auc,
         "best_train_cross_entropy": best_loss,
         "best_val_balanced_accuracy": best_val_score,
+        "best_val_tuned_balanced_accuracy": best_val_tuned_score,
+        "best_val_auc": best_val_auc,
+        "best_val_auprc": best_val_auprc,
+        "best_val_tuned_metrics": best_val_tuned_metrics,
+        "best_val_auc_metrics": best_val_auc_metrics,
+        "best_val_auprc_metrics": best_val_auprc_metrics,
         "config": vars(args),
     }
     checkpoint_paths = {}
@@ -507,6 +571,9 @@ def train_one(
         "best_tuned": best_tuned_state,
         "best_auc": best_auc_state,
         "best_loss": best_loss_state,
+        "best_val_tuned": best_val_tuned_state,
+        "best_val_auc": best_val_auc_state,
+        "best_val_auprc": best_val_auprc_state,
         "final": final_state,
     }
     for checkpoint_name, state in states.items():
@@ -533,6 +600,12 @@ def train_one(
         "best_train_auc": best_auc,
         "best_train_cross_entropy": best_loss,
         "best_val_balanced_accuracy": best_val_score,
+        "best_val_tuned_balanced_accuracy": best_val_tuned_score,
+        "best_val_auc": best_val_auc,
+        "best_val_auprc": best_val_auprc,
+        "best_val_tuned_metrics": best_val_tuned_metrics,
+        "best_val_auc_metrics": best_val_auc_metrics,
+        "best_val_auprc_metrics": best_val_auprc_metrics,
         "final": history[-1],
         "history": history,
         "checkpoints": checkpoint_paths,
@@ -630,6 +703,15 @@ def parse_args():
     )
     parser.add_argument("--seeds", nargs="+", type=int, default=[42, 43, 44])
     parser.add_argument("--sample-seed", type=int, default=2026)
+    parser.add_argument(
+        "--feature-transform",
+        choices=["raw", "standardize"],
+        default="raw",
+        help=(
+            "Unsupervised transform fitted on the full training cache and "
+            "applied identically to matched heads."
+        ),
+    )
     parser.add_argument("--train-per-class", type=int, default=256)
     parser.add_argument("--val-per-class", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=40)
@@ -703,6 +785,13 @@ def main():
         per_class=args.val_per_class,
         seed=args.sample_seed + 1,
     )
+    pre_transform_train_diagnostics = feature_diagnostics(train_features)
+    train_features, val_features, transform_metadata = apply_feature_transform(
+        cache["train"]["features"].float(),
+        train_features,
+        val_features,
+        args.feature_transform,
+    )
 
     manifest = {
         "feature_cache": str(args.feature_cache),
@@ -716,6 +805,10 @@ def main():
         ).tolist(),
         "val_class_counts": torch.bincount(val_labels, minlength=2).tolist(),
         "feature_dim": int(train_features.shape[1]),
+        "feature_transform": transform_metadata,
+        "selected_train_pre_transform_diagnostics": (
+            pre_transform_train_diagnostics
+        ),
         "selected_train_feature_diagnostics": feature_diagnostics(
             train_features
         ),
@@ -738,6 +831,10 @@ def main():
         f"  effective_rank={feature_info['effective_rank']}/"
         f"{feature_info['feature_dimension']} "
         f"constant_dims={feature_info['constant_dimension_indices']}"
+    )
+    print(
+        f"  feature_transform={args.feature_transform} "
+        f"fit_scope={transform_metadata['fit_scope']}"
     )
     budget = (
         f"max_steps={args.max_steps}"
