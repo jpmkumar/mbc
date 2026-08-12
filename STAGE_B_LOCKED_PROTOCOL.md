@@ -51,11 +51,20 @@ percentile interval on the paired AUPRC gap by resampling whole test patients.
 
 ## Results so far
 
-| fold | MLP test AUPRC | VQC test AUPRC | VQC − MLP | patient-cluster 95% CI |
-| --- | --- | --- | --- | --- |
-| 0 | 0.89197 | 0.88564 | −0.00633 | not available, cache predates patient IDs |
-| 1 | 0.88071 | 0.88045 | −0.00026 | [−0.00051, −0.00009] |
+| fold | MLP test AUPRC | VQC test AUPRC | mean VQC − MLP | seed median | patient-cluster 95% CI |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 0.89197 | 0.88564 | −0.00633 | −0.00621 | not available, cache predates patient IDs |
+| 1 | 0.88071 | 0.88045 | −0.00026 | −0.00025 | [−0.00051, −0.00009] |
+| 2 | 0.90018 | 0.90458 | +0.00441 | −0.00005 | [+0.00257, +0.00659] |
 
-Both folds fall inside the pre-specified ±0.01 practical margin. Once folds 2
-through 4 are scored, aggregate the five fold-level paired differences before
-making any cross-fold or equivalence statement.
+Every fold falls inside the pre-specified ±0.01 practical margin, but the sign
+is not stable across folds. Report the mean, which is the pre-registered
+statistic, together with the seed median and the `unstable_models` flag: on
+Fold 2 the positive mean comes from a single MLP seed that converged 0.013
+AUPRC below its siblings, and the patient-cluster interval cannot see that
+because it holds the checkpoints fixed while resampling patients.
+
+Once folds 3 and 4 are scored, aggregate the five fold-level paired
+differences before making any cross-fold or equivalence statement. Between-fold
+spread is roughly an order of magnitude wider than any within-fold interval, so
+the cross-fold interval is the one that matters for the claim.

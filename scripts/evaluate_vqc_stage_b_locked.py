@@ -30,6 +30,9 @@ from src.utils.metrics import compute_metrics_at_threshold  # noqa: E402
 
 MODELS = ("mlp", "vqc")
 PRACTICAL_AUPRC_MARGIN = 0.01
+# A seed spread this wide means one run converged badly, so the across-seed
+# mean says more about optimization luck than about the head being compared.
+UNSTABLE_SEED_AUPRC_SPREAD = PRACTICAL_AUPRC_MARGIN
 
 
 def load_locked_settings(path: Path) -> dict[str, dict]:
@@ -221,6 +224,24 @@ def patient_cluster_bootstrap(
     }
 
 
+def seed_stability(results: list[dict]) -> dict:
+    """Flag heads whose seeds disagree enough to distort the across-seed mean."""
+    report = {}
+    for model in MODELS:
+        values = [
+            float(row["test_metrics"]["auprc"])
+            for row in results
+            if row["model"] == model
+        ]
+        report[model] = {
+            "min_test_auprc": min(values),
+            "max_test_auprc": max(values),
+            "spread": max(values) - min(values),
+            "unstable": max(values) - min(values) > UNSTABLE_SEED_AUPRC_SPREAD,
+        }
+    return report
+
+
 def summarize_results(
     results: list[dict],
     fold: int = 0,
@@ -274,6 +295,11 @@ def summarize_results(
         for seed in common_seeds
     ]
     mean_delta = statistics.mean(paired_auprc_deltas)
+    median_delta = statistics.median(paired_auprc_deltas)
+    stability = seed_stability(results)
+    unstable_models = [
+        model for model in MODELS if stability[model]["unstable"]
+    ]
     fold_label = f"Fold {fold}"
     if abs(mean_delta) <= PRACTICAL_AUPRC_MARGIN:
         verdict = (
@@ -327,6 +353,17 @@ def summarize_results(
                 "separate the heads."
             )
 
+    if unstable_models:
+        verdict += (
+            " Read that with care: the "
+            + " and ".join(model.upper() for model in unstable_models)
+            + " seeds disagree by more than the practical margin, so the "
+            f"across-seed mean of {mean_delta:+.5f} is pulled by one poorly "
+            f"converged run. The seed median is {median_delta:+.5f}. The "
+            "patient-cluster interval holds these checkpoints fixed and "
+            "therefore does not cover that optimization variance."
+        )
+
     return {
         "protocol": f"one_time_validation_locked_fold{fold}_test",
         "fold": fold,
@@ -336,6 +373,9 @@ def summarize_results(
         "by_model": by_model,
         "paired_seed_auprc_deltas": paired_auprc_deltas,
         "mean_vqc_minus_mlp_test_auprc": mean_delta,
+        "median_vqc_minus_mlp_test_auprc": median_delta,
+        "seed_stability": stability,
+        "unstable_models": unstable_models,
         "patient_cluster_bootstrap": bootstrap,
         "uncertainty_note": uncertainty_note,
         "verdict": verdict,
@@ -513,6 +553,12 @@ def main():
         "Mean VQC - MLP test AUPRC: "
         f"{summary['mean_vqc_minus_mlp_test_auprc']:+.6f}"
     )
+    if summary["unstable_models"]:
+        print(
+            "Seed instability in: "
+            + ", ".join(summary["unstable_models"])
+            + f" | seed median delta {summary['median_vqc_minus_mlp_test_auprc']:+.6f}"
+        )
     if bootstrap is not None:
         print(
             "Patient-cluster 95% CI over "

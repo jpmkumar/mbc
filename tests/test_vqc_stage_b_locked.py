@@ -109,6 +109,56 @@ class StageBLockedTestTests(unittest.TestCase):
         self.assertIn("Fold 1", summary["verdict"])
 
 
+class SeedStabilityTests(unittest.TestCase):
+    @staticmethod
+    def build_results(mlp_values, vqc_values):
+        results = []
+        for model, values in (("mlp", mlp_values), ("vqc", vqc_values)):
+            for seed, auprc in zip((42, 43, 44), values):
+                results.append(
+                    {
+                        "model": model,
+                        "seed": seed,
+                        "feature_transform": "raw",
+                        "learning_rate": 0.001 if model == "mlp" else 0.01,
+                        "test_metrics": {
+                            "auprc": auprc,
+                            "auc": 0.95,
+                            "balanced_accuracy": 0.88,
+                            "f1": 0.82,
+                            "precision": 0.76,
+                            "recall": 0.90,
+                        },
+                    }
+                )
+        return results
+
+    def test_one_bad_seed_is_flagged_and_median_is_reported(self):
+        results = self.build_results(
+            [0.90457, 0.89128, 0.90468], [0.90452, 0.90460, 0.90462]
+        )
+
+        summary = summarize_results(results, fold=2)
+
+        self.assertEqual(summary["unstable_models"], ["mlp"])
+        self.assertTrue(summary["seed_stability"]["mlp"]["unstable"])
+        self.assertFalse(summary["seed_stability"]["vqc"]["unstable"])
+        self.assertGreater(summary["mean_vqc_minus_mlp_test_auprc"], 0.004)
+        self.assertLess(summary["median_vqc_minus_mlp_test_auprc"], 0.0)
+        self.assertIn("poorly", summary["verdict"])
+        self.assertIn("seed median", summary["verdict"])
+
+    def test_stable_seeds_add_no_caution(self):
+        results = self.build_results(
+            [0.90457, 0.90461, 0.90468], [0.90452, 0.90460, 0.90462]
+        )
+
+        summary = summarize_results(results, fold=1)
+
+        self.assertEqual(summary["unstable_models"], [])
+        self.assertNotIn("poorly", summary["verdict"])
+
+
 class PatientClusterBootstrapTests(unittest.TestCase):
     def test_groups_keep_every_row_of_a_patient_together(self):
         patient_ids = ["b", "a", "b", "c", "a", "b"]
