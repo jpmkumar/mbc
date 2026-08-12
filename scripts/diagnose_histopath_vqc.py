@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.models.hybrid_model import ClassicalMLPHead  # noqa: E402
 from src.models.vqc import VQCHead  # noqa: E402
-from src.utils.metrics import compute_metrics, compute_metrics_at_threshold  # noqa: E402
+from src.utils.metrics import compute_metrics  # noqa: E402
 
 
 MODEL_NAMES = ("linear", "mlp", "vqc")
@@ -197,37 +197,90 @@ def evaluate(
 
 
 def _optimal_balanced_threshold(labels, probs) -> dict:
-    """Find the exact train threshold maximizing balanced accuracy."""
+    """Find the exact best threshold in O(n log n) time."""
+    targets = np.asarray(labels, dtype=np.int64)
     probabilities = np.asarray(probs, dtype=float)
-    unique = np.unique(probabilities)
-    if len(unique) == 1:
-        candidates = np.array(
-            [
-                np.nextafter(unique[0], -np.inf),
-                unique[0],
-                np.nextafter(unique[0], np.inf),
-            ]
-        )
-    else:
-        midpoints = (unique[:-1] + unique[1:]) / 2.0
-        candidates = np.concatenate(
-            (
-                [np.nextafter(unique[0], -np.inf)],
-                midpoints,
-                [np.nextafter(unique[-1], np.inf)],
-            )
-        )
-    rows = [
-        compute_metrics_at_threshold(labels, probabilities, float(threshold))
-        for threshold in candidates
-    ]
-    return max(
-        rows,
-        key=lambda row: (
-            row["balanced_accuracy"],
-            -abs(row["threshold"] - 0.5),
-        ),
+    if len(targets) == 0:
+        raise ValueError("Cannot optimize a threshold on an empty dataset.")
+
+    order = np.argsort(-probabilities, kind="stable")
+    sorted_probs = probabilities[order]
+    sorted_targets = targets[order]
+    cumulative_tp = np.concatenate(
+        ([0], np.cumsum(sorted_targets == 1, dtype=np.int64))
     )
+    cumulative_fp = np.concatenate(
+        ([0], np.cumsum(sorted_targets == 0, dtype=np.int64))
+    )
+
+    # A threshold can only change predictions between distinct probabilities.
+    boundaries = np.concatenate(
+        (
+            [0],
+            np.flatnonzero(sorted_probs[:-1] > sorted_probs[1:]) + 1,
+            [len(sorted_probs)],
+        )
+    )
+    tp = cumulative_tp[boundaries].astype(float)
+    fp = cumulative_fp[boundaries].astype(float)
+    positives = max(float((targets == 1).sum()), 1.0)
+    negatives = max(float((targets == 0).sum()), 1.0)
+    fn = positives - tp
+    tn = negatives - fp
+    recall = tp / positives
+    specificity = tn / negatives
+    balanced_accuracy = (recall + specificity) / 2.0
+
+    thresholds = np.empty(len(boundaries), dtype=float)
+    for index, boundary in enumerate(boundaries):
+        if boundary == 0:
+            thresholds[index] = np.nextafter(sorted_probs[0], np.inf)
+        elif boundary == len(sorted_probs):
+            thresholds[index] = np.nextafter(sorted_probs[-1], -np.inf)
+        else:
+            thresholds[index] = (
+                sorted_probs[boundary - 1] + sorted_probs[boundary]
+            ) / 2.0
+
+    best_score = balanced_accuracy.max()
+    tied = np.flatnonzero(
+        np.isclose(balanced_accuracy, best_score, rtol=0.0, atol=1e-12)
+    )
+    best_index = tied[
+        np.argmin(np.abs(thresholds[tied] - 0.5))
+    ]
+
+    selected_tp = int(tp[best_index])
+    selected_fp = int(fp[best_index])
+    selected_fn = int(fn[best_index])
+    selected_tn = int(tn[best_index])
+    predicted_positive = selected_tp + selected_fp
+    precision = (
+        selected_tp / predicted_positive
+        if predicted_positive > 0
+        else 0.0
+    )
+    selected_recall = float(recall[best_index])
+    f1 = (
+        2.0 * precision * selected_recall / (precision + selected_recall)
+        if precision + selected_recall > 0
+        else 0.0
+    )
+    total = len(targets)
+    return {
+        "threshold": float(thresholds[best_index]),
+        "accuracy": float((selected_tp + selected_tn) / total),
+        "balanced_accuracy": float(balanced_accuracy[best_index]),
+        "precision": float(precision),
+        "recall": selected_recall,
+        "f1": float(f1),
+        "pred_positive_rate": float(predicted_positive / total),
+        "confusion_matrix": [
+            [selected_tn, selected_fp],
+            [selected_fn, selected_tp],
+        ],
+        "n_samples": total,
+    }
 
 
 def _trainable_vector(model: nn.Module) -> torch.Tensor:

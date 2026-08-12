@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from scripts.diagnose_histopath_vqc import (
@@ -12,6 +13,7 @@ from scripts.diagnose_histopath_vqc import (
     apply_feature_transform,
     balanced_indices,
 )
+from src.utils.metrics import compute_metrics_at_threshold
 
 
 class VQCTrainabilityDiagnosticTests(unittest.TestCase):
@@ -32,6 +34,31 @@ class VQCTrainabilityDiagnosticTests(unittest.TestCase):
         self.assertEqual(tuned["balanced_accuracy"], 1.0)
         self.assertGreater(tuned["threshold"], 0.61)
         self.assertLess(tuned["threshold"], 0.80)
+
+    def test_fast_threshold_matches_exhaustive_sweep(self):
+        labels = np.array([0, 1, 0, 1, 1, 0, 0, 1])
+        probs = np.array([0.2, 0.7, 0.4, 0.8, 0.7, 0.1, 0.4, 0.9])
+        unique = np.unique(probs)
+        thresholds = np.concatenate(
+            (
+                [np.nextafter(unique[0], -np.inf)],
+                (unique[:-1] + unique[1:]) / 2.0,
+                [np.nextafter(unique[-1], np.inf)],
+            )
+        )
+        exhaustive = [
+            compute_metrics_at_threshold(labels, probs, threshold)
+            for threshold in thresholds
+        ]
+        expected_score = max(
+            row["balanced_accuracy"] for row in exhaustive
+        )
+
+        actual = _optimal_balanced_threshold(labels, probs)
+
+        self.assertAlmostEqual(
+            actual["balanced_accuracy"], expected_score
+        )
 
     def test_standardization_is_fitted_on_training_cache_only(self):
         fit = torch.tensor([[0.0, 10.0], [2.0, 14.0]])
