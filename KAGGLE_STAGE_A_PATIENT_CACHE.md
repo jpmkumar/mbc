@@ -1,14 +1,17 @@
-# Kaggle: patient-aware Stage-A cache for Fold 1
+# Kaggle: patient-aware Stage-A cache for one fold
 
-This run creates the next independent Stage-A representation while preserving
-patient IDs for clustered uncertainty analysis. It does not run Stage B or C.
+This run creates an independent Stage-A representation for a single patient
+fold while preserving patient IDs for clustered uncertainty analysis. It does
+not run Stage B or C. Folds 0 and 1 are done; run this for folds 2, 3, and 4,
+one Kaggle session each.
 
 Before running:
 
 1. Attach the **Breast Histopathology Images** dataset.
 2. Set **Accelerator: GPU T4 ×2** and **Internet: On**.
 3. Ensure at least **6 GPU-hours** remain; do not start with only 4 h 10 min.
-4. Add the eight cells below in order and choose **Save Version → Save & Run All**.
+4. Set `FOLD` in Cell 1 to the fold you are generating.
+5. Add the eight cells below in order and choose **Save Version → Save & Run All**.
 
 ## Cell 1 — Clone the repository
 
@@ -18,6 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+FOLD = 2  # set to 2, 3, or 4
 REPO = Path("/kaggle/working/mbc")
 BRANCH = "docs/histopath-writing-q1-guidelines"
 
@@ -41,6 +45,7 @@ COMMIT = subprocess.check_output(
 ).strip()
 print("Repository:", REPO)
 print("Commit:", COMMIT)
+print("Fold:", FOLD)
 ```
 
 ## Cell 2 — Install dependencies
@@ -90,7 +95,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-fold_manifest = Path("data/splits/histopath/folds/fold_1/train.csv")
+fold_manifest = Path(f"data/splits/histopath/folds/fold_{FOLD}/train.csv")
 if not fold_manifest.exists():
     subprocess.run(
         [
@@ -107,7 +112,7 @@ if not fold_manifest.exists():
     )
 
 assert fold_manifest.exists()
-print("Fold-1 manifest:", fold_manifest)
+print(f"Fold-{FOLD} manifest:", fold_manifest)
 ```
 
 ## Cell 5 — Train Stage A and export the patient-aware cache
@@ -121,7 +126,7 @@ subprocess.run(
         sys.executable,
         "scripts/train_histopath_cv.py",
         "--fold",
-        "1",
+        str(FOLD),
         "--experiment",
         "E3",
         "--seed",
@@ -159,11 +164,12 @@ assert metadata["contains_patient_ids"] is True
 report = {
     "feature_cache": str(FEATURE_CACHE),
     "commit": COMMIT,
-    "fold": 1,
+    "fold": FOLD,
     "source_stage": metadata["source_stage"],
     "source_checkpoint": metadata["source_checkpoint"],
     "splits": {},
 }
+patients_by_split = {}
 
 for split in ("train", "val", "test"):
     payload = cache[split]
@@ -171,13 +177,19 @@ for split in ("train", "val", "test"):
     labels = payload["labels"]
     assert len(patient_ids) == len(labels) == len(payload["features"])
     assert all(not value.startswith("sample_") for value in patient_ids)
+    patients_by_split[split] = set(patient_ids)
     report["splits"][split] = {
         "samples": len(labels),
         "class_counts": torch.bincount(labels, minlength=2).tolist(),
         "unique_patients": len(set(patient_ids)),
     }
 
-REPORT_PATH = Path("results/histopath/fold1_patient_cache_report.json")
+for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
+    overlap = patients_by_split[left] & patients_by_split[right]
+    assert not overlap, f"Patient leakage between {left} and {right}: {overlap}"
+report["patient_overlap"] = "none"
+
+REPORT_PATH = Path(f"results/histopath/fold{FOLD}_patient_cache_report.json")
 REPORT_PATH.write_text(json.dumps(report, indent=2))
 print(json.dumps(report, indent=2))
 ```
@@ -191,7 +203,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 STAMP = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
-BUNDLE = Path(f"/kaggle/working/stage_a_patient_cache_fold1_{STAMP}")
+BUNDLE = Path(f"/kaggle/working/stage_a_patient_cache_fold{FOLD}_{STAMP}")
 BUNDLE.mkdir(parents=True, exist_ok=False)
 
 shutil.copy2(FEATURE_CACHE, BUNDLE / FEATURE_CACHE.name)
@@ -205,7 +217,7 @@ checkpoint = Path(cache["metadata"]["source_checkpoint"])
 if checkpoint.exists():
     shutil.copy2(checkpoint, BUNDLE / checkpoint.name)
 
-runtime_splits = Path("data/splits/histopath/runtime/fold_1")
+runtime_splits = Path(f"data/splits/histopath/runtime/fold_{FOLD}")
 if runtime_splits.exists():
     shutil.copytree(runtime_splits, BUNDLE / "runtime_splits")
 
@@ -214,8 +226,9 @@ if runtime_splits.exists():
     json.dumps(
         {
             "commit": COMMIT,
-            "fold": 1,
+            "fold": FOLD,
             "experiment": "E3_stage_a_only",
+            "archive": str(ARCHIVE),
             "accelerator": "GPU_T4_x2",
             "patient_ids_preserved": True,
         },
@@ -238,5 +251,12 @@ print("Download:", ZIP_PATH)
 print("Size: %.2f MB" % (ZIP_PATH.stat().st_size / (1024 * 1024)))
 ```
 
-Expected runtime: approximately **4.5–5.5 hours**. Stage-A image training
-requires a **GPU T4 ×2 session**; the quantum simulator is not used in this run.
+Expected runtime: **2.5–5.5 hours**, dominated by Stage-A epochs before early
+stopping plus roughly 80 minutes to extract features for all 277,524 patches.
+Fold 1 stopped after 7 epochs and finished in about 2 h 10 min. A **GPU T4 ×2
+session** is required; the quantum simulator is not used in this run.
+
+## After the download
+
+The matched MLP/VQC comparison on the resulting cache runs locally on CPU in
+about eight minutes. See `STAGE_B_LOCKED_PROTOCOL.md`.

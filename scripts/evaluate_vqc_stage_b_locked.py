@@ -8,12 +8,14 @@ import csv
 import json
 import statistics
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from sklearn.metrics import average_precision_score
 from torch.utils.data import DataLoader, TensorDataset
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,10 +145,87 @@ def evaluate_checkpoint(
         ),
         "threshold_source": "best_val_auprc_checkpoint_validation_subset",
         "test_metrics": metrics,
+    }, probs
+
+
+def patient_row_groups(patient_ids: Sequence[str]) -> list[np.ndarray]:
+    """Group row indices by patient so resampling keeps patients intact."""
+    _, membership = np.unique(np.asarray(patient_ids), return_inverse=True)
+    order = np.argsort(membership, kind="stable")
+    boundaries = np.searchsorted(
+        membership[order], np.arange(membership.max() + 2)
+    )
+    return [
+        order[boundaries[index] : boundaries[index + 1]]
+        for index in range(len(boundaries) - 1)
+    ]
+
+
+def patient_cluster_bootstrap(
+    labels: np.ndarray,
+    patient_ids: Sequence[str],
+    probabilities: dict[str, dict[int, np.ndarray]],
+    replicates: int,
+    seed: int,
+) -> dict:
+    """Bootstrap the paired AUPRC gap by resampling whole patients.
+
+    Patches from one patient are correlated, so sample-level intervals are
+    anticonservative. Resampling patient clusters keeps that dependence.
+    """
+    groups = patient_row_groups(patient_ids)
+    seeds = sorted(set(probabilities["mlp"]) & set(probabilities["vqc"]))
+    generator = np.random.default_rng(seed)
+    deltas: list[float] = []
+    for _ in range(replicates):
+        chosen = generator.integers(0, len(groups), size=len(groups))
+        rows = np.concatenate([groups[index] for index in chosen])
+        replicate_labels = labels[rows]
+        if replicate_labels.min() == replicate_labels.max():
+            continue
+        deltas.append(
+            float(
+                np.mean(
+                    [
+                        average_precision_score(
+                            replicate_labels, probabilities["vqc"][s][rows]
+                        )
+                        - average_precision_score(
+                            replicate_labels, probabilities["mlp"][s][rows]
+                        )
+                        for s in seeds
+                    ]
+                )
+            )
+        )
+    if not deltas:
+        raise ValueError("Every bootstrap replicate was single-class.")
+
+    lower = float(np.percentile(deltas, 2.5))
+    upper = float(np.percentile(deltas, 97.5))
+    return {
+        "method": "patient_cluster_percentile_bootstrap",
+        "statistic": "mean_over_seeds_vqc_minus_mlp_test_auprc",
+        "unique_test_patients": len(groups),
+        "requested_replicates": replicates,
+        "usable_replicates": len(deltas),
+        "bootstrap_seed": seed,
+        "confidence_level": 0.95,
+        "ci_lower": lower,
+        "ci_upper": upper,
+        "bootstrap_mean": float(np.mean(deltas)),
+        "excludes_zero": lower > 0.0 or upper < 0.0,
+        "within_practical_margin": (
+            lower > -PRACTICAL_AUPRC_MARGIN and upper < PRACTICAL_AUPRC_MARGIN
+        ),
     }
 
 
-def summarize_results(results: list[dict]) -> dict:
+def summarize_results(
+    results: list[dict],
+    fold: int = 0,
+    bootstrap: dict | None = None,
+) -> dict:
     by_model = {}
     for model in MODELS:
         model_results = [row for row in results if row["model"] == model]
@@ -195,36 +274,70 @@ def summarize_results(results: list[dict]) -> dict:
         for seed in common_seeds
     ]
     mean_delta = statistics.mean(paired_auprc_deltas)
+    fold_label = f"Fold {fold}"
     if abs(mean_delta) <= PRACTICAL_AUPRC_MARGIN:
         verdict = (
             "Locked MLP and VQC heads are within the pre-specified 0.01 "
-            "practical AUPRC margin on Fold 0. This is no detected quantum "
-            "advantage, not a formal equivalence claim."
+            f"practical AUPRC margin on {fold_label}. This is no detected "
+            "quantum advantage, not a formal equivalence claim."
         )
     elif mean_delta > 0:
         verdict = (
             "The locked VQC exceeds the MLP by more than 0.01 test AUPRC on "
-            "Fold 0; replication on untouched patient folds is required."
+            f"{fold_label}; replication on untouched patient folds is required."
         )
     else:
         verdict = (
             "The locked VQC trails the MLP by more than 0.01 test AUPRC on "
-            "Fold 0 under the matched frozen-feature protocol."
+            f"{fold_label} under the matched frozen-feature protocol."
         )
 
+    if bootstrap is None:
+        uncertainty_note = (
+            "Seed variation measures initialization sensitivity only. This "
+            "cache has no patient IDs, so patient-cluster confidence "
+            "intervals cannot be computed."
+        )
+    else:
+        uncertainty_note = (
+            "The 95% interval resamples whole test patients, so it reflects "
+            "between-patient variation rather than initialization noise. It "
+            "covers this fold alone and is not a cross-fold interval."
+        )
+        if bootstrap["within_practical_margin"]:
+            verdict += (
+                " The patient-cluster interval also lies entirely inside the "
+                "practical margin on this fold"
+            )
+            verdict += (
+                ", while excluding zero, so the residual gap is measurable "
+                "but too small to matter clinically."
+                if bootstrap["excludes_zero"]
+                else "."
+            )
+        elif bootstrap["excludes_zero"]:
+            verdict += (
+                " The patient-cluster interval excludes zero, so the gap is "
+                "resolvable above between-patient noise on this fold."
+            )
+        else:
+            verdict += (
+                " The patient-cluster interval spans zero and extends beyond "
+                "the practical margin, so this fold is underpowered to "
+                "separate the heads."
+            )
+
     return {
-        "protocol": "one_time_validation_locked_fold0_test",
+        "protocol": f"one_time_validation_locked_fold{fold}_test",
+        "fold": fold,
         "held_out_test_evaluated": True,
         "primary_metric": "auprc",
         "practical_auprc_margin": PRACTICAL_AUPRC_MARGIN,
         "by_model": by_model,
         "paired_seed_auprc_deltas": paired_auprc_deltas,
         "mean_vqc_minus_mlp_test_auprc": mean_delta,
-        "uncertainty_note": (
-            "Seed variation measures initialization sensitivity only. The "
-            "current cache has no patient IDs, so patient-cluster confidence "
-            "intervals cannot be computed."
-        ),
+        "patient_cluster_bootstrap": bootstrap,
+        "uncertainty_note": uncertainty_note,
         "verdict": verdict,
     }
 
@@ -250,6 +363,9 @@ def parse_args():
     )
     parser.add_argument("--seeds", nargs="+", type=int, default=[42, 43, 44])
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--fold", type=int, default=0)
+    parser.add_argument("--bootstrap-replicates", type=int, default=2000)
+    parser.add_argument("--bootstrap-seed", type=int, default=2026)
     return parser.parse_args()
 
 
@@ -282,8 +398,14 @@ def main():
     fit_features = cache["train"]["features"].float()
     test_features_raw = cache["test"]["features"].float()
     test_labels = cache["test"]["labels"].long()
+    test_patient_ids = cache["test"].get("patient_ids")
+    if test_patient_ids is not None and len(test_patient_ids) != len(test_labels):
+        raise ValueError("Cached patient IDs are misaligned with test labels.")
 
     results = []
+    probabilities: dict[str, dict[int, np.ndarray]] = {
+        model: {} for model in MODELS
+    }
     for model in MODELS:
         setting = locked_settings[model]
         transform = setting["feature_transform"]
@@ -304,7 +426,7 @@ def main():
                 f"Evaluating locked {model} seed={seed} "
                 f"transform={transform} lr={setting['learning_rate']}"
             )
-            result = evaluate_checkpoint(
+            result, test_probabilities = evaluate_checkpoint(
                 checkpoint_path,
                 model,
                 seed,
@@ -315,8 +437,23 @@ def main():
             )
             result["transform_metadata"] = transform_metadata
             results.append(result)
+            probabilities[model][seed] = test_probabilities
 
-    summary = summarize_results(results)
+    bootstrap = None
+    if test_patient_ids is not None and args.bootstrap_replicates > 0:
+        print(
+            f"Bootstrapping {args.bootstrap_replicates} patient-cluster "
+            "resamples of the paired AUPRC gap"
+        )
+        bootstrap = patient_cluster_bootstrap(
+            test_labels.numpy(),
+            test_patient_ids,
+            probabilities,
+            args.bootstrap_replicates,
+            args.bootstrap_seed,
+        )
+
+    summary = summarize_results(results, fold=args.fold, bootstrap=bootstrap)
     summary["source"] = {
         "feature_cache": str(args.feature_cache),
         "pilot_dir": str(args.pilot_dir),
@@ -325,6 +462,7 @@ def main():
         "test_class_counts": torch.bincount(
             test_labels, minlength=2
         ).tolist(),
+        "test_patient_ids_available": test_patient_ids is not None,
     }
     summary["runs"] = results
     result_path.write_text(json.dumps(summary, indent=2))
@@ -375,6 +513,12 @@ def main():
         "Mean VQC - MLP test AUPRC: "
         f"{summary['mean_vqc_minus_mlp_test_auprc']:+.6f}"
     )
+    if bootstrap is not None:
+        print(
+            "Patient-cluster 95% CI over "
+            f"{bootstrap['unique_test_patients']} patients: "
+            f"[{bootstrap['ci_lower']:+.6f}, {bootstrap['ci_upper']:+.6f}]"
+        )
     print(summary["verdict"])
     print(f"Saved {result_path}")
 
