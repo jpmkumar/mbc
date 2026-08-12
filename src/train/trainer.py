@@ -403,6 +403,8 @@ class HybridTrainer:
             "val": cached_val,
             "test": cached_test,
             "metadata": {
+                "feature_cache_format_version": 3,
+                "contains_patient_ids": True,
                 "source_stage": "stage_a",
                 "source_checkpoint": str(
                     self._best_stage_ckpt_path("stage_a")
