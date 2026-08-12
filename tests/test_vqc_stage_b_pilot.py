@@ -68,6 +68,29 @@ class StageBPilotTests(unittest.TestCase):
 
         self.assertIn("practically tied", summary["verdict"])
 
+    def test_single_head_extension_reports_no_comparison(self):
+        runs = [
+            {
+                "feature_transform": "raw",
+                "learning_rate": 0.01,
+                "model": "vqc",
+                "seed": seed,
+                "best_val_auprc": 0.95,
+                "best_val_auc": 0.95,
+                "best_val_tuned_balanced_accuracy": 0.88,
+                "best_train_tuned_balanced_accuracy": 0.94,
+                "runtime_s": 57.0,
+            }
+            for seed in (45, 46, 47)
+        ]
+
+        summary = build_summary(runs)
+
+        self.assertEqual(len(summary["rows"]), 1)
+        self.assertNotIn("mlp", summary["best_by_model"])
+        self.assertIsNone(summary["best_vqc_minus_mlp_val_auprc"])
+        self.assertIn("Incomplete", summary["verdict"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -498,6 +498,7 @@ def main():
         "feature_cache": str(args.feature_cache),
         "pilot_dir": str(args.pilot_dir),
         "locked_selection": str(locked_path),
+        "train_samples": len(fit_features),
         "test_samples": len(test_labels),
         "test_class_counts": torch.bincount(
             test_labels, minlength=2

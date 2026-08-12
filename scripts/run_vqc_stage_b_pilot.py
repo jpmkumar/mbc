@@ -195,6 +195,21 @@ def parse_args():
         type=float,
         default=[1e-3, 3e-3, 1e-2],
     )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=["mlp", "vqc"],
+        default=["mlp", "vqc"],
+        help=(
+            "Restrict training to these heads. Use a single head to add seeds "
+            "for one pre-registered cell without retraining the other."
+        ),
+    )
+    parser.add_argument(
+        "--summary-name",
+        default="stage_b_pilot_summary",
+        help="Base name for the summary files, so partial runs do not clobber.",
+    )
     parser.add_argument("--seeds", nargs="+", type=int, default=[42, 43, 44])
     parser.add_argument("--sample-seed", type=int, default=2026)
     parser.add_argument("--train-per-class", type=int, default=4096)
@@ -226,8 +241,7 @@ def main():
                 "--output-dir",
                 str(setting_dir),
                 "--models",
-                "mlp",
-                "vqc",
+                *args.models,
                 "--seeds",
                 *[str(seed) for seed in args.seeds],
                 "--sample-seed",
@@ -289,10 +303,10 @@ def main():
         key: str(value) if isinstance(value, Path) else value
         for key, value in vars(args).items()
     }
-    summary_path = args.output_dir / "stage_b_pilot_summary.json"
+    summary_path = args.output_dir / f"{args.summary_name}.json"
     summary_path.write_text(json.dumps(summary, indent=2))
 
-    csv_path = args.output_dir / "stage_b_pilot_summary.csv"
+    csv_path = args.output_dir / f"{args.summary_name}.csv"
     with open(csv_path, "w", newline="") as handle:
         writer = csv.DictWriter(
             handle,
