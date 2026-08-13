@@ -2,8 +2,9 @@
 
 This run creates an independent Stage-A representation for a single patient
 fold while preserving patient IDs for clustered uncertainty analysis. It does
-not run Stage B or C. Folds 0 and 1 are done; run this for folds 2, 3, and 4,
-one Kaggle session each.
+not run Stage B or C. Folds 1 and 2 are done; run this for folds 3, 4, and 0,
+one Kaggle session each. Fold 0 needs a rerun because its original cache
+predates patient-ID storage.
 
 Before running:
 
@@ -21,7 +22,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-FOLD = 2  # set to 2, 3, or 4
+FOLD = 0  # set to 0, 3, or 4
 REPO = Path("/kaggle/working/mbc")
 BRANCH = "docs/histopath-writing-q1-guidelines"
 
