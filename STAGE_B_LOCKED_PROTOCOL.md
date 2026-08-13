@@ -97,38 +97,41 @@ DST=results/histopath/vqc_stage_b_confirmatory_fold<N>
 ## Steps 4b to 5b — Secondary nested-rate analysis (about 20 minutes per fold)
 
 Declared in `preregistration/stage_b_protocol_v3_nested_secondary.md`. Run this
-**after** the fold's v2 result exists, never instead of it. It trains the two
-non-registered cells to the full seed set, picks each head's rate from that
-fold's validation split alone, and scores the test split a second time.
+**after** the fold's v2 result exists, never instead of it. Both heads are
+trained at both candidate rates, each head's rate is then chosen from that
+fold's validation split alone, and the test split is scored a second time.
+
+Training is bit-reproducible: retraining fold 3's MLP at 1e-3 with seed 42
+returned 0.9471811078241599 validation AUPRC, identical to the v2 run to all
+sixteen digits. So all four cells are retrained here rather than part-copied
+from the v2 directories. That keeps the procedure identical on every fold,
+including fold 0 whose pilot directory no longer exists locally, and it makes
+the self-check below exact rather than approximate.
 
 ```bash
-CACHE=results/histopath/feature_cache/E3_histopath_fold<N>_histopath_seed42_pre_mag_mac_ulg_ulc_features.pt
-DST=results/histopath/vqc_stage_b_confirmatory_fold<N>
-
-cp results/histopath/vqc_stage_b_pilot_fold<N>/raw_lr0p01/mlp_seed4[234]_best_val_auprc.pt   $DST/raw_lr0p01/
-cp results/histopath/vqc_stage_b_pilot_fold<N>/raw_lr0p001/vqc_seed4[234]_best_val_auprc.pt $DST/raw_lr0p001/
+N=3
+CACHE=results/histopath/feature_cache/E3_histopath_fold${N}_histopath_seed42_pre_mag_mac_ulg_ulc_features.pt
+DST=results/histopath/vqc_stage_b_nested_fold${N}
 
 .venv/bin/python scripts/run_vqc_stage_b_pilot.py --feature-cache $CACHE \
-  --output-dir $DST --feature-transforms raw --learning-rates 0.01 \
-  --models mlp --seeds 45 46 47 48 49 50 51 --summary-name mlp_hi_lr_extension
-
-.venv/bin/python scripts/run_vqc_stage_b_pilot.py --feature-cache $CACHE \
-  --output-dir $DST --feature-transforms raw --learning-rates 0.001 \
-  --models vqc --seeds 45 46 47 48 49 50 51 --summary-name vqc_lo_lr_extension
+  --output-dir $DST --feature-transforms raw --learning-rates 0.001 0.01 \
+  --seeds 42 43 44 45 46 47 48 49 50 51 --summary-name nested_grid
 
 .venv/bin/python scripts/select_vqc_stage_b_nested.py --pilot-dir $DST \
-  --fold <N> --output results/histopath/vqc_stage_b_nested_selection_fold<N>.json
+  --fold $N --output results/histopath/vqc_stage_b_nested_selection_fold${N}.json
 
 .venv/bin/python scripts/evaluate_vqc_stage_b_locked.py --feature-cache $CACHE \
   --pilot-dir $DST \
-  --locked-selection results/histopath/vqc_stage_b_nested_selection_fold<N>.json \
-  --output-dir results/histopath/vqc_stage_b_nested_test_fold<N> \
-  --fold <N> --bootstrap-replicates 2000 \
+  --locked-selection results/histopath/vqc_stage_b_nested_selection_fold${N}.json \
+  --output-dir results/histopath/vqc_stage_b_nested_test_fold${N} \
+  --fold $N --bootstrap-replicates 2000 \
   --seeds 42 43 44 45 46 47 48 49 50 51
 ```
 
-If the selector reports that it reproduced the locked rates, the fold's v3
-result must equal its v2 result, which is a useful self-check on the pipeline.
+Budget about 20 minutes of training and 6 minutes of scoring per fold. When the
+selector reports that it reproduced the locked rates, the fold's v3 numbers must
+equal its v2 numbers exactly; a mismatch means the pipeline, not the protocol,
+is at fault.
 
 ## Step 6 — Aggregate across folds, once all five exist
 
