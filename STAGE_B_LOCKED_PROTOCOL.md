@@ -113,7 +113,8 @@ v1, three seeds:
 
 | fold | mean VQC − MLP | seed median | patient-cluster 95% CI |
 | --- | --- | --- | --- |
-| 0 | −0.00633 | −0.00621 | not available, cache predates patient IDs |
+| 0, legacy cache | −0.00633 | −0.00621 | not available, cache predates patient IDs |
+| 0, regenerated | −0.00253 | −0.00257 | [−0.00833, −0.00020] |
 | 1 | −0.00026 | −0.00025 | [−0.00051, −0.00009] |
 | 2 | +0.00441 | −0.00005 | [+0.00257, +0.00659] |
 
@@ -121,8 +122,17 @@ v2, ten seeds:
 
 | fold | mean VQC − MLP | seed median | MLP seed spread | VQC seed spread |
 | --- | --- | --- | --- | --- |
+| 0 | −0.00241 | −0.00257 | 0.00075 | 0.00331 |
 | 1 | +0.00107 | −0.0000005 | 0.01178 | 0.00058 |
 | 2 | +0.00063 | −0.00005 | 0.01342 | 0.00564 |
+
+Fold 0's regenerated split is identical to the legacy one down to the class
+counts, so the fold generator is deterministic across code versions. Its
+encoder is not: early stopping fired at 7 epochs instead of 16, giving weaker
+Stage-A features, and the fold-level gap moved from −0.00633 to −0.00241 as a
+result. Same patients, same split, different representation. Report the
+regenerated value and cite the legacy one as evidence that the gap depends on
+Stage-A training luck rather than on the head.
 
 Ten seeds move both folds toward zero and reveal the real pattern: when both
 heads converge, their test AUPRC agrees to about five decimal places, and the
