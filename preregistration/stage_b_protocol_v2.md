@@ -67,6 +67,34 @@ the corrected interval is the one that governs any claim.
   sensitivity; v2 governs the conclusion because it was declared in advance and
   is better powered.
 
+## Amendment, declared before Fold 0 was regenerated
+
+Fold 0 is not an ordinary confirmatory fold. The locked settings were chosen on
+Fold 0's validation split, so Fold 0 is the selection fold even though its test
+split was never used for tuning. Regenerating its cache with patient IDs
+retrains the encoder but does not remove that status, because the settings
+still trace back to the same patients and the same split.
+
+Fixed now, before any regenerated Fold-0 number exists:
+
+- The **primary** cross-fold analysis includes all five folds, with Fold 0
+  labeled as the selection fold.
+- A **sensitivity** analysis over the purely confirmatory folds 1 through 4 is
+  reported beside it.
+- The primary analysis is the one that governs, and it is the conservative
+  choice here: on the legacy three-seed cache Fold 0 gave −0.00633, the most
+  MLP-favourable value observed, so excluding it would make an equivalence
+  claim easier rather than harder. Keeping it in avoids dropping the fold that
+  works against the conclusion.
+- The regenerated cache replaces the legacy one for all reported numbers. The
+  legacy three-seed result is retained as a provenance check. If the
+  regenerated Fold-0 split sizes differ from the legacy 53,894 test patches
+  across 38,363 negative and 15,531 positive, the split generator is not
+  deterministic across code versions and that must be reported rather than
+  quietly reconciled.
+- The pre-registration file is **not** re-derived from the regenerated cache.
+  Head selection stays locked to `stage_b_locked_selection_fold0.json`.
+
 ## Known limitations, acknowledged in advance
 
 Five folds give four degrees of freedom, so the corrected interval will be
