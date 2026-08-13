@@ -5,6 +5,54 @@ This runbook executes one immutable `(fold, width)` cell from
 exploratory. The eight outstanding replications are folds 1–4 at 4 and
 12 qubits. Run one pair per Kaggle version.
 
+## Preferred route — one launcher cell
+
+Create a new Kaggle notebook, attach the dataset, select GPU T4 ×2 and enable
+Internet. Add only this one cell, edit the two values, then choose
+**Save Version → Save & Run All**:
+
+```python
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+FOLD = 1       # allowed: 1, 2, 3, 4
+N_QUBITS = 4   # allowed: 4, 12
+
+REPO = Path("/kaggle/working/mbc")
+if REPO.exists():
+    shutil.rmtree(REPO)
+subprocess.run(
+    [
+        "git", "clone",
+        "--branch", "docs/histopath-writing-q1-guidelines",
+        "--single-branch",
+        "https://github.com/jpmkumar/mbc.git",
+        str(REPO),
+    ],
+    check=True,
+)
+subprocess.run(
+    [sys.executable, "-m", "pip", "install", "-q", "-r", REPO / "requirements.txt"],
+    check=True,
+)
+subprocess.run(
+    [
+        sys.executable,
+        REPO / "scripts/run_histopath_width_kaggle.py",
+        "--fold", str(FOLD),
+        "--n-qubits", str(N_QUBITS),
+    ],
+    cwd=REPO,
+    check=True,
+)
+```
+
+The committed runner performs every verification and packaging step below and
+prints the final `/kaggle/working/histopath_width_...zip` path. The remaining
+eight-cell form is retained as a transparent manual fallback.
+
 Before running:
 
 1. Attach the **Breast Histopathology Images** dataset.
