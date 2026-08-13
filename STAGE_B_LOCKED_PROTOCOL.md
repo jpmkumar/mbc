@@ -94,6 +94,42 @@ DST=results/histopath/vqc_stage_b_confirmatory_fold<N>
   --seeds 42 43 44 45 46 47 48 49 50 51
 ```
 
+## Steps 4b to 5b — Secondary nested-rate analysis (about 20 minutes per fold)
+
+Declared in `preregistration/stage_b_protocol_v3_nested_secondary.md`. Run this
+**after** the fold's v2 result exists, never instead of it. It trains the two
+non-registered cells to the full seed set, picks each head's rate from that
+fold's validation split alone, and scores the test split a second time.
+
+```bash
+CACHE=results/histopath/feature_cache/E3_histopath_fold<N>_histopath_seed42_pre_mag_mac_ulg_ulc_features.pt
+DST=results/histopath/vqc_stage_b_confirmatory_fold<N>
+
+cp results/histopath/vqc_stage_b_pilot_fold<N>/raw_lr0p01/mlp_seed4[234]_best_val_auprc.pt   $DST/raw_lr0p01/
+cp results/histopath/vqc_stage_b_pilot_fold<N>/raw_lr0p001/vqc_seed4[234]_best_val_auprc.pt $DST/raw_lr0p001/
+
+.venv/bin/python scripts/run_vqc_stage_b_pilot.py --feature-cache $CACHE \
+  --output-dir $DST --feature-transforms raw --learning-rates 0.01 \
+  --models mlp --seeds 45 46 47 48 49 50 51 --summary-name mlp_hi_lr_extension
+
+.venv/bin/python scripts/run_vqc_stage_b_pilot.py --feature-cache $CACHE \
+  --output-dir $DST --feature-transforms raw --learning-rates 0.001 \
+  --models vqc --seeds 45 46 47 48 49 50 51 --summary-name vqc_lo_lr_extension
+
+.venv/bin/python scripts/select_vqc_stage_b_nested.py --pilot-dir $DST \
+  --fold <N> --output results/histopath/vqc_stage_b_nested_selection_fold<N>.json
+
+.venv/bin/python scripts/evaluate_vqc_stage_b_locked.py --feature-cache $CACHE \
+  --pilot-dir $DST \
+  --locked-selection results/histopath/vqc_stage_b_nested_selection_fold<N>.json \
+  --output-dir results/histopath/vqc_stage_b_nested_test_fold<N> \
+  --fold <N> --bootstrap-replicates 2000 \
+  --seeds 42 43 44 45 46 47 48 49 50 51
+```
+
+If the selector reports that it reproduced the locked rates, the fold's v3
+result must equal its v2 result, which is a useful self-check on the pipeline.
+
 ## Step 6 — Aggregate across folds, once all five exist
 
 ```bash
@@ -166,5 +202,11 @@ self-serving. With four folds the corrected 90% interval is
 [−0.00994, +0.01735] around a mean of +0.00370, and the pre-declared rules
 return **inconclusive**.
 
-Fold 4 is still required before Step 6 is final, and the hyperparameter
-transfer problem needs an explicit decision rather than a silent one.
+Fold 4 is still required before Step 6 is final.
+
+The transfer problem is handled by the secondary analysis in steps 4b to 5b:
+each head's rate is chosen inside its own fold from validation data only, so
+the comparison is between two fairly tuned heads. Protocol v2 stays primary
+because v3 was added after seeing a v2 result, and that ordering is disclosed
+in the declaration rather than smoothed over. Both results are reported side by
+side, and no fold is scored a third time.
