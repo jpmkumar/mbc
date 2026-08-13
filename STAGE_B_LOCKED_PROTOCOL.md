@@ -117,6 +117,7 @@ v1, three seeds:
 | 0, regenerated | −0.00253 | −0.00257 | [−0.00833, −0.00020] |
 | 1 | −0.00026 | −0.00025 | [−0.00051, −0.00009] |
 | 2 | +0.00441 | −0.00005 | [+0.00257, +0.00659] |
+| 3 | +0.01592 | +0.00948 | [+0.00859, +0.02490] |
 
 v2, ten seeds:
 
@@ -125,6 +126,7 @@ v2, ten seeds:
 | 0 | −0.00241 | −0.00257 | 0.00075 | 0.00331 |
 | 1 | +0.00107 | −0.0000005 | 0.01178 | 0.00058 |
 | 2 | +0.00063 | −0.00005 | 0.01342 | 0.00564 |
+| 3 | +0.01553 | +0.01365 | 0.03928 | 0.01123 |
 
 Fold 0's regenerated split is identical to the legacy one down to the class
 counts, so the fold generator is deterministic across code versions. Its
@@ -142,5 +144,27 @@ AUPRC below its own median; the VQC produced none beyond the flag threshold.
 Report the mean as the primary statistic, with the median and the seed spread
 beside it.
 
-Folds 3 and 4 are still required before the cross-fold decision in Step 6 can
-be treated as final.
+Fold 3 breaks that pattern and needs its own paragraph. Its ten-seed median
+stays at +0.01365 instead of collapsing toward zero, so it is not one stray
+MLP run. The two heads still share a ceiling — the MLP's best seed reaches
+0.88927 test AUPRC against the VQC's 0.89008, a gap of 0.00081 — but the MLP
+lands within 0.005 of that ceiling in only 3 of 10 seeds while the VQC manages
+9 of 10.
+
+The cause is the locked learning rate, not the head. The fold-3 pilot also
+trained the non-registered cells, and at 1e-2 the MLP scores 0.94894,
+0.94894, 0.94894 validation AUPRC across three seeds: perfectly stable and
+slightly *above* the VQC's own locked 1e-2 numbers of 0.94882, 0.94696,
+0.94587. So the pre-registered 1e-3 rate, chosen on fold 0, simply fails to
+transfer to fold 3, and the primary comparison there pits a badly tuned MLP
+against a well tuned VQC. This diagnostic is post-hoc and uses validation
+data only; it explains the fold, it does not license editing it.
+
+Note the direction of the bias. It inflates the VQC and therefore pushes the
+cross-fold result away from the equivalence conclusion, so it is not
+self-serving. With four folds the corrected 90% interval is
+[−0.00994, +0.01735] around a mean of +0.00370, and the pre-declared rules
+return **inconclusive**.
+
+Fold 4 is still required before Step 6 is final, and the hyperparameter
+transfer problem needs an explicit decision rather than a silent one.
