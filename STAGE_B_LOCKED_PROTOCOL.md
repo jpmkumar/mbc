@@ -137,8 +137,23 @@ is at fault.
 
 ```bash
 .venv/bin/python scripts/aggregate_vqc_stage_b_folds.py \
-  --summaries results/histopath/vqc_stage_b_confirmatory_test_fold*/locked_test_summary.json \
-  --output results/histopath/vqc_stage_b_crossfold.json
+  --summaries results/histopath/vqc_stage_b_confirmatory_test_fold{0,1,2,3,4}/locked_test_summary.json \
+  --output results/histopath/vqc_stage_b_crossfold_v2_final.json
+
+.venv/bin/python scripts/aggregate_vqc_stage_b_folds.py \
+  --summaries results/histopath/vqc_stage_b_nested_test_fold{0,1,2,3,4}/locked_test_summary.json \
+  --output results/histopath/vqc_stage_b_crossfold_v3_final.json
+
+# Pre-declared sensitivity analyses excluding the Fold-0 selection fold.
+.venv/bin/python scripts/aggregate_vqc_stage_b_folds.py \
+  --summaries results/histopath/vqc_stage_b_confirmatory_test_fold{1,2,3,4}/locked_test_summary.json \
+  --expected-folds 4 \
+  --output results/histopath/vqc_stage_b_crossfold_v2_sensitivity_folds1_4.json
+
+.venv/bin/python scripts/aggregate_vqc_stage_b_folds.py \
+  --summaries results/histopath/vqc_stage_b_nested_test_fold{1,2,3,4}/locked_test_summary.json \
+  --expected-folds 4 \
+  --output results/histopath/vqc_stage_b_crossfold_v3_sensitivity_folds1_4.json
 ```
 
 This applies the pre-declared decision rules: the Nadeau-Bengio corrected 90%
@@ -146,7 +161,7 @@ interval must sit inside ±0.01 AUPRC for an equivalence claim, and the
 corrected 95% interval must exclude zero with a mean beyond the margin for a
 difference claim. Anything else is reported as inconclusive.
 
-## Results so far
+## Final results
 
 v1, three seeds:
 
@@ -166,6 +181,7 @@ v2, ten seeds:
 | 1 | +0.00107 | −0.0000005 | 0.01178 | 0.00058 |
 | 2 | +0.00063 | −0.00005 | 0.01342 | 0.00564 |
 | 3 | +0.01553 | +0.01365 | 0.03928 | 0.01123 |
+| 4 | +0.00748 | +0.00334 | 0.02499 | 0.01874 |
 
 Fold 0's regenerated split is identical to the legacy one down to the class
 counts, so the fold generator is deterministic across code versions. Its
@@ -205,11 +221,50 @@ self-serving. With four folds the corrected 90% interval is
 [−0.00994, +0.01735] around a mean of +0.00370, and the pre-declared rules
 return **inconclusive**.
 
-Fold 4 is still required before Step 6 is final.
-
 The transfer problem is handled by the secondary analysis in steps 4b to 5b:
 each head's rate is chosen inside its own fold from validation data only, so
 the comparison is between two fairly tuned heads. Protocol v2 stays primary
 because v3 was added after seeing a v2 result, and that ordering is disclosed
 in the declaration rather than smoothed over. Both results are reported side by
 side, and no fold is scored a third time.
+
+Fold 4 independently reproduces the transfer problem. Under v2 the locked
+1e-3 MLP rate yields +0.00748 mean VQC-minus-MLP AUPRC, but both heads are
+unstable and the seed median is +0.00334. Validation selection moves the MLP
+to 1e-2; under v3 the gap reverses to −0.00416 mean and −0.00207 median, both
+inside the practical margin.
+
+v3, ten seeds with each head's rate selected independently from that fold's
+validation split:
+
+| fold | selected MLP LR | selected VQC LR | mean VQC − MLP | seed median | MLP seed spread | VQC seed spread |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 1e-2 | 1e-2 | −0.00254 | −0.00267 | 0.00010 | 0.00331 |
+| 1 | 1e-2 | 1e-2 | −0.00013 | −0.000003 | 0.000006 | 0.00058 |
+| 2 | 1e-2 | 1e-2 | −0.00083 | −0.00017 | 0.00011 | 0.00564 |
+| 3 | 1e-2 | 1e-2 | −0.00143 | −0.00038 | 0.00005 | 0.01123 |
+| 4 | 1e-2 | 1e-2 | −0.00416 | −0.00207 | 0.00114 | 0.01874 |
+
+### Final cross-fold decisions
+
+| analysis | folds | mean gap | corrected 90% CI | TOST p | decision |
+| --- | --- | --- | --- | --- | --- |
+| v2 primary, locked Fold-0 rates | 0–4 | +0.00446 | [−0.00613, +0.01504] | 0.16345 | inconclusive |
+| v2 sensitivity, selection fold excluded | 1–4 | +0.00618 | [−0.00583, +0.01818] | 0.25394 | inconclusive |
+| v3 secondary, nested validation selection | 0–4 | −0.00182 | [−0.00415, +0.00051] | 0.00085 | practical equivalence |
+| v3 sensitivity, selection fold excluded | 1–4 | −0.00164 | [−0.00467, +0.00139] | 0.00371 | practical equivalence |
+
+The primary pre-registered conclusion is **inconclusive at the observed
+interval width**, not a null result. The outcome-triggered but pre-declared
+secondary analysis shows **practical equivalence within ±0.01 AUPRC** when
+both heads receive the same fold-specific validation selection. Excluding the
+Fold-0 selection fold leaves both decisions unchanged. The manuscript must
+report both conclusions and the ordering of the protocols: v3 explains the v2
+failure but does not replace it.
+
+The scientific finding is therefore narrower than either “quantum advantage”
+or “VQC failure.” The VQC and matched MLP heads have practically equivalent
+discrimination after fair tuning. The apparent VQC gains under locked rates
+come from poor transfer of the MLP learning rate and seed-level convergence
+failures. VQC seeds remain less stable on folds 3 and 4, so equivalence in
+AUPRC does not imply equivalent optimization reliability.

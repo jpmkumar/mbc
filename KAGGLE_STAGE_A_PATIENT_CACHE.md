@@ -2,8 +2,8 @@
 
 This run creates an independent Stage-A representation for a single patient
 fold while preserving patient IDs for clustered uncertainty analysis. It does
-not run Stage B or C. Folds 0, 1, 2 and 3 are done; only **fold 4** is
-outstanding, so set `FOLD = 4` in Cell 1 and run one session.
+not run Stage B or C. All five patient folds were completed on 2026-08-13;
+retain these cells as the reproducibility runbook.
 
 Before running:
 
@@ -21,7 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-FOLD = 4  # last outstanding fold
+FOLD = 4  # replace only when intentionally reproducing another fold
 REPO = Path("/kaggle/working/mbc")
 BRANCH = "docs/histopath-writing-q1-guidelines"
 
