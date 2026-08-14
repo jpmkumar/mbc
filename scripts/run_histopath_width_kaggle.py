@@ -132,6 +132,40 @@ def select_result(summary: dict, fold: int, n_qubits: int) -> dict:
     return matches[0]
 
 
+def checkpoint_finiteness(path: Path) -> dict:
+    """Audit a stage checkpoint without treating NaN predictions as zero."""
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    state = (
+        payload.get("model_state_dict")
+        or payload.get("best_state_dict")
+        or payload.get("state_dict")
+    )
+    if not isinstance(state, dict):
+        raise RuntimeError(f"No model state found in {path}.")
+
+    total_values = 0
+    nonfinite_values = 0
+    affected_tensors = []
+    for name, value in state.items():
+        if not torch.is_tensor(value):
+            continue
+        total_values += value.numel()
+        count = int((~torch.isfinite(value)).sum().item())
+        if count:
+            nonfinite_values += count
+            affected_tensors.append(
+                {"name": name, "nonfinite": count, "values": value.numel()}
+            )
+    return {
+        "checkpoint": str(path),
+        "numerically_valid": nonfinite_values == 0,
+        "total_values": total_values,
+        "nonfinite_values": nonfinite_values,
+        "affected_tensor_count": len(affected_tensors),
+        "affected_tensors": affected_tensors,
+    }
+
+
 def verify_result(fold: int, n_qubits: int, commit: str) -> tuple[dict, Path]:
     summary_path = ROOT / "results/histopath/cv_summary.json"
     summary = json.loads(summary_path.read_text())
@@ -155,6 +189,22 @@ def verify_result(fold: int, n_qubits: int, commit: str) -> tuple[dict, Path]:
     if stage["global_best_stage"] not in stage["stages"]:
         raise RuntimeError("Selected stage is absent from stage attribution.")
 
+    stage_numerics = {}
+    for name, stage_record in stage["stages"].items():
+        checkpoint_path = ROOT / stage_record["checkpoint"]
+        audit = checkpoint_finiteness(checkpoint_path)
+        stage_numerics[name] = audit
+        if not audit["numerically_valid"]:
+            print(
+                f"WARNING: {name} is a numerical convergence failure: "
+                f"{audit['nonfinite_values']} non-finite checkpoint values. "
+                "Its derived metrics must not be interpreted as performance."
+            )
+
+    selected_audit = stage_numerics[stage["global_best_stage"]]
+    if not selected_audit["numerically_valid"]:
+        raise RuntimeError("Validation selected a numerically invalid stage.")
+
     report = {
         "commit": commit,
         "fold": fold,
@@ -165,6 +215,7 @@ def verify_result(fold: int, n_qubits: int, commit: str) -> tuple[dict, Path]:
         "patient_overlap": "none",
         "test_metrics": record["test_metrics"],
         "selected_stage": stage["global_best_stage"],
+        "stage_numerics": stage_numerics,
         "stage_comparison": stage,
     }
     report_path = (

@@ -1,9 +1,13 @@
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 
+import torch
+
 from scripts.run_histopath_width_kaggle import (
     build_train_command,
+    checkpoint_finiteness,
     select_result,
     validate_pair,
 )
@@ -87,6 +91,32 @@ class KaggleWidthRunnerTests(unittest.TestCase):
             select_result(summary, 2, 12)
         with self.assertRaises(RuntimeError):
             select_result({"results": {"E3": [row, row]}}, 2, 4)
+
+    def test_checkpoint_audit_distinguishes_finite_and_corrupt_states(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            finite_path = Path(tmp) / "finite.pt"
+            corrupt_path = Path(tmp) / "corrupt.pt"
+            torch.save(
+                {"model_state_dict": {"weight": torch.tensor([1.0, 2.0])}},
+                finite_path,
+            )
+            torch.save(
+                {
+                    "model_state_dict": {
+                        "weight": torch.tensor([1.0, float("nan"), float("inf")])
+                    }
+                },
+                corrupt_path,
+            )
+
+            finite = checkpoint_finiteness(finite_path)
+            corrupt = checkpoint_finiteness(corrupt_path)
+
+        self.assertTrue(finite["numerically_valid"])
+        self.assertEqual(finite["nonfinite_values"], 0)
+        self.assertFalse(corrupt["numerically_valid"])
+        self.assertEqual(corrupt["nonfinite_values"], 2)
+        self.assertEqual(corrupt["affected_tensor_count"], 1)
 
 
 if __name__ == "__main__":

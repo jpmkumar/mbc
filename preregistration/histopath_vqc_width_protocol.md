@@ -103,6 +103,33 @@ equivalent, different or inconclusive within the stated margin. No claim of
 quantum computational advantage, hardware speedup or general superiority is
 permitted because every run uses a classical simulator.
 
+## Amendment after the first replication bundle
+
+Fold 1 at q4 was the first run produced after this declaration. Its globally
+selected Stage-A checkpoint and Stage-B checkpoint are numerically finite, but
+joint Stage C diverged: 9,181,482 of 11,805,029 checkpoint values are
+non-finite. The evaluator converted the resulting invalid predictions to zero
+metrics. Those zeros are not valid estimates of discrimination and must not be
+entered as AUPRC = 0 in any stage-difference analysis.
+
+Fixed now, before any q12 or fold 2–4 replication result exists:
+
+- Every stage checkpoint is audited with `torch.isfinite` before its metrics
+  are interpreted.
+- A stage containing any non-finite value is labeled a **numerical convergence
+  failure**. Its raw diagnostic output is retained, but its AUPRC and other
+  predictive metrics are treated as missing rather than zero.
+- The run remains valid for the primary system-width outcome only when the
+  globally validation-selected checkpoint is finite. Fold-1 q4 selected finite
+  Stage A, so its primary AUPRC remains valid.
+- The training algorithm is not changed after observing this failure. Adding a
+  gradient guard now would give later widths a different optimizer and destroy
+  comparability. Numerical-failure frequency is instead reported by width as a
+  secondary outcome.
+- If the globally selected checkpoint is non-finite, that fold-width run is
+  invalid for the primary analysis and is reported as a failed run without
+  substitution or silent rerunning.
+
 ## Resource plan
 
 Eight new Kaggle versions are required: folds 1–4 at q4 and q12. Based on the
