@@ -12,5 +12,6 @@ ENV MBC_GIT_COMMIT="${MBC_GIT_COMMIT}" \
 # The build context is produced by `git archive`, so only files tracked by the
 # declared source revision enter the image.
 COPY . /opt/mbc
+RUN chmod -R a+rX /opt/mbc
 WORKDIR /opt/mbc
 

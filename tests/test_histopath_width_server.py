@@ -22,6 +22,12 @@ def write_patients(path: Path, patients: set[str]) -> None:
 
 
 class ServerWidthRunnerTests(unittest.TestCase):
+    def test_experiment_image_is_readable_by_non_root_runtime_user(self):
+        dockerfile = (
+            Path(__file__).resolve().parents[1] / "docker/Dockerfile.experiment"
+        ).read_text()
+        self.assertIn("RUN chmod -R a+rX /opt/mbc", dockerfile)
+
     def test_accepts_complete_declared_server_matrix(self):
         for fold in (1, 2, 3, 4):
             for width in (4, 8, 12):
