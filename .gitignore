@@ -41,6 +41,16 @@ scripts/generate_manuscript_docx.py
 GPU_PROJECT_PLAN.md
 **/*PROJECT_PLAN*.md
 
+# Paper workspaces — curated local exports only
+papers/paper_a/results/
+papers/paper_a/assets/
+papers/paper_a/**/*.docx
+papers/paper_a/**/*.pdf
+papers/paper_b/results/
+papers/paper_b/assets/
+papers/paper_b/**/*.docx
+papers/paper_b/**/*.pdf
+
 # LaTeX build
 paper/*.aux
 paper/*.bbl
