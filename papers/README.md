@@ -1,14 +1,46 @@
 # MBC publication workspaces
 
-Two-paper plan (decided 2026-07):
+This repository hosts **two journal papers** from the same codebase. Each paper
+has a **dedicated directory** for citation in Data/Code Availability statements.
+You do **not** need separate GitHub repositories or branches.
 
-| Workspace | Data | Claim | Manuscript |
-|-----------|------|-------|------------|
-| [`paper_a/`](paper_a/) | **Wisconsin Breast Cancer (WBCD)** — tabular clinical features | Hybrid classical–quantum pipeline on **native low-D features** | To be drafted |
-| [`paper_b/`](paper_b/) | **Kaggle IDC histopathology** — image patches, patient-level CV | Bolt-on VQC **does not beat** matched classical controls (null / equivalence) | [`paper/main.tex`](../paper/main.tex) |
+**Repository:** https://github.com/jpmkumar/mbc
 
-Shared training code stays at repo root (`src/`, `scripts/`, `configs/`).
-Raw checkpoints live in gitignored `results/`. Each workspace keeps curated
-tables, figure exports, and local notes.
+## Citation URLs (copy for manuscripts)
 
-**Current active experiments** (width ablation, Stage-B, server runs) belong to **Paper B**.
+Replace `<TAG>` with a release tag at submission (recommended for reviewers).
+
+| Paper | Dataset | Cite this path | Availability doc |
+|-------|---------|----------------|------------------|
+| **A** | Wisconsin Breast Cancer (**tabular**) | `https://github.com/jpmkumar/mbc/tree/<TAG>/papers/paper_a` | [`paper_a/CODE_AVAILABILITY.md`](paper_a/CODE_AVAILABILITY.md) |
+| **B** | Kaggle IDC **histopathology** | `https://github.com/jpmkumar/mbc/tree/<TAG>/papers/paper_b` and `.../paper` | [`paper_b/CODE_AVAILABILITY.md`](paper_b/CODE_AVAILABILITY.md) |
+
+**Development branch** (moving target — do not cite in final submission):
+
+```text
+https://github.com/jpmkumar/mbc/tree/docs/histopath-writing-q1-guidelines/papers/paper_b
+```
+
+## Create stable tags before submission
+
+```bash
+# After Paper B experiments and manuscript are frozen:
+git tag -a paper-b-v1.0 -m "Paper B histopath reproducibility release"
+git push origin paper-b-v1.0
+
+# After Paper A confirmatory runs are frozen:
+git tag -a paper-a-v1.0 -m "Paper A tabular WBCD reproducibility release"
+git push origin paper-a-v1.0
+```
+
+Reviewers then open exactly the code that matches each paper.
+
+## Scope summary
+
+| | Paper A | Paper B |
+|---|---------|---------|
+| **Folder** | [`paper_a/`](paper_a/) | [`paper_b/`](paper_b/) |
+| **Manuscript** | TBD under `paper_a/` | [`paper/main.tex`](../paper/main.tex) |
+| **Shared code** | `src/`, root `requirements.txt` | same |
+
+See [`HOW_TO_USE_AGENTS.md`](HOW_TO_USE_AGENTS.md) for separate Cursor agents.

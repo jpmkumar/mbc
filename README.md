@@ -2,7 +2,20 @@
 
 Unified cross-modality breast cancer classification using EfficientNet-B0, Transformer-based modality-invariant learning, and an optional variational quantum circuit (VQC) head with multi-method explainability.
 
-**Publication package:** [`publication/README.md`](publication/README.md) | **Paper PDF:** `make -C paper pdf`
+**GitHub:** https://github.com/jpmkumar/mbc
+
+## Journal papers (code paths for citation)
+
+This repository supports **two papers**. Cite the **directory + release tag**, not the repo root alone.
+
+| Paper | Topic | Code path | Availability |
+|-------|-------|-----------|--------------|
+| **A** | Wisconsin Breast Cancer **tabular** hybrid QML | [`papers/paper_a/`](papers/paper_a/) | [`papers/paper_a/CODE_AVAILABILITY.md`](papers/paper_a/CODE_AVAILABILITY.md) |
+| **B** | IDC **histopathology** patches, patient-level CV | [`papers/paper_b/`](papers/paper_b/) + [`paper/`](paper/) | [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md) |
+
+Tag a release before submission (e.g. `paper-b-v1.0`) so the URL is frozen. Details: [`papers/README.md`](papers/README.md).
+
+**Publication package (legacy mammo):** [`publication/README.md`](publication/README.md) | **Paper B PDF:** `make -C paper pdf`
 
 ## Primary result (CBIS-DDSM mammography)
 
@@ -63,8 +76,12 @@ See [`DATA_SCALE.md`](DATA_SCALE.md) for scale comparison with 100k+ image paper
 
 EfficientNet-B0 → Modality Transformer → Compression (8-D) → Classical head (Stage A) or VQC head (Stage B)
 
-## Paper
+## Paper B (histopath — active manuscript)
 
 - Manuscript: [`paper/main.tex`](paper/main.tex)
+- Code index: [`papers/paper_b/`](papers/paper_b/)
 - Checklist: [`paper/SUBMISSION_CHECKLIST.md`](paper/SUBMISSION_CHECKLIST.md)
-- GitHub: https://github.com/jpmkumar/mbc
+
+## Paper A (tabular WBCD — separate publication)
+
+- Code index: [`papers/paper_a/`](papers/paper_a/)
