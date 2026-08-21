@@ -1,0 +1,17 @@
+FROM nvcr.io/nvidia/pytorch:26.06-py3@sha256:43c018d6a12963f1a1bad85ef8574b5c2a978eec2be0ebcacfb87f69e0d210e1
+
+ENV PIP_ROOT_USER_ACTION=ignore \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY requirements-paperc.lock /tmp/requirements-paperc.lock
+
+# Same discipline as Dockerfile.gpu: the lock is the exact transitive delta from
+# the digest-pinned NGC base, installed without resolution so a later index
+# change cannot silently alter the qualified environment. Paper C needs timm and
+# huggingface_hub for the foundation encoders and does not need PennyLane.
+RUN python -m pip install --no-cache-dir --no-deps \
+      -r /tmp/requirements-paperc.lock \
+    && python -m pip check
+
+WORKDIR /opt/mbc
