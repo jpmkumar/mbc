@@ -2,8 +2,6 @@
 
 Unified cross-modality breast cancer classification using EfficientNet-B0, Transformer-based modality-invariant learning, and an optional variational quantum circuit (VQC) head with multi-method explainability.
 
-**Publication package:** [`publication/README.md`](publication/README.md) | **Paper PDF:** `make -C paper pdf`
-
 ## Primary result (CBIS-DDSM mammography)
 
 | Metric | Enhanced Stage A |
@@ -29,10 +27,6 @@ python experiments/run_training.py \
 
 # Histopathology IDC patches (Colab: see COLAB_HISTOPATH.md)
 python scripts/train_histopath_cv.py --fold 0 --experiment E2
-
-# Publication figures + LaTeX tables
-python scripts/generate_publication.py
-make -C paper pdf
 ```
 
 ## Project Structure
@@ -42,10 +36,7 @@ configs/              YAML configs (default, mammo_enhanced, benedetti_vqc)
 data/download/        CBIS-DDSM, BUSI download scripts
 src/                  Models, training, data pipeline
 experiments/          run_training.py, generate_figures.py
-publication/          Metrics JSON, tables, publication guide
-figures/              Paper-ready PNG figures (300 DPI)
-paper/                IEEE Access LaTeX manuscript
-scripts/              analyze_results, generate_publication
+scripts/              Training, evaluation, and analysis entry points
 ```
 
 ## Datasets
@@ -63,8 +54,9 @@ See [`DATA_SCALE.md`](DATA_SCALE.md) for scale comparison with 100k+ image paper
 
 EfficientNet-B0 → Modality Transformer → Compression (8-D) → Classical head (Stage A) or VQC head (Stage B)
 
-## Paper
+## Scope
 
-- Manuscript: [`paper/main.tex`](paper/main.tex)
-- Checklist: [`paper/SUBMISSION_CHECKLIST.md`](paper/SUBMISSION_CHECKLIST.md)
+This repository is a code release. Manuscript sources, figure artwork, and
+submission material are maintained separately.
+
 - GitHub: https://github.com/jpmkumar/mbc
