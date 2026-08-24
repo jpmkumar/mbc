@@ -25,8 +25,7 @@ Example after tagging: `git tag paper-a-v1.0 && git push origin paper-a-v1.0`
 
 | Path | Role |
 |------|------|
-| [`papers/paper_a/`](.) | Paper A index, agent brief, curated exports |
-| [`publication/publication_metrics.json`](../../publication/publication_metrics.json) | Pilot WBCD metrics (`pilot_wbcd_tabular`) |
+| [`papers/paper_a/`](.) | Paper A index and curated exports |
 | [`src/models/vqc.py`](../../src/models/vqc.py) | Shared VQC head implementation |
 | [`src/models/hybrid_model.py`](../../src/models/hybrid_model.py) | Shared hybrid model |
 | `papers/paper_a/scripts/` | Paper-A-specific export scripts (when added) |
@@ -38,7 +37,6 @@ Confirmatory WBCD training scripts will live under `papers/paper_a/scripts/` or
 
 | Path | Belongs to |
 |------|------------|
-| [`paper/main.tex`](../../paper/main.tex) | **Paper B** (histopath manuscript) |
 | [`papers/paper_b/`](../../papers/paper_b/) | **Paper B** |
 | [`scripts/train_histopath_cv.py`](../../scripts/train_histopath_cv.py) | **Paper B** |
 | [`KAGGLE_HISTOPATH*.md`](../../KAGGLE_HISTOPATH.md) | **Paper B** |
@@ -58,7 +56,7 @@ Replace `<TAG>` with your release tag at submission time.
 git clone https://github.com/jpmkumar/mbc.git
 cd mbc
 python papers/paper_a/scripts/export_curated_metrics.py
-# Reads publication/publication_metrics.json → papers/paper_a/results/
+# Writes papers/paper_a/results/
 ```
 
 Full confirmatory WBCD pipeline: **pending** — see [`README.md`](README.md).

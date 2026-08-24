@@ -11,11 +11,9 @@ This repository supports **two papers**. Cite the **directory + release tag**, n
 | Paper | Topic | Code path | Availability |
 |-------|-------|-----------|--------------|
 | **A** | Wisconsin Breast Cancer **tabular** hybrid QML | [`papers/paper_a/`](papers/paper_a/) | [`papers/paper_a/CODE_AVAILABILITY.md`](papers/paper_a/CODE_AVAILABILITY.md) |
-| **B** | IDC **histopathology** patches, patient-level CV | [`papers/paper_b/`](papers/paper_b/) + [`paper/`](paper/) | [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md) |
+| **B** | IDC **histopathology** patches, patient-level CV | [`papers/paper_b/`](papers/paper_b/) | [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md) |
 
 Tag a release before submission (e.g. `paper-b-v1.0`) so the URL is frozen. Details: [`papers/README.md`](papers/README.md).
-
-**Publication package (legacy mammo):** [`publication/README.md`](publication/README.md) | **Paper B PDF:** `make -C paper pdf`
 
 ## Primary result (CBIS-DDSM mammography)
 
@@ -42,10 +40,6 @@ python experiments/run_training.py \
 
 # Histopathology IDC patches (Colab: see COLAB_HISTOPATH.md)
 python scripts/train_histopath_cv.py --fold 0 --experiment E2
-
-# Publication figures + LaTeX tables
-python scripts/generate_publication.py
-make -C paper pdf
 ```
 
 ## Project Structure
@@ -55,10 +49,9 @@ configs/              YAML configs (default, mammo_enhanced, benedetti_vqc)
 data/download/        CBIS-DDSM, BUSI download scripts
 src/                  Models, training, data pipeline
 experiments/          run_training.py, generate_figures.py
-publication/          Metrics JSON, tables, publication guide
-figures/              Paper-ready PNG figures (300 DPI)
-paper/                IEEE Access LaTeX manuscript
-scripts/              analyze_results, generate_publication
+preregistration/      Protocols declared before the confirmatory runs
+papers/               Per-paper code index and availability paths
+scripts/              Training, evaluation, and analysis entry points
 ```
 
 ## Datasets
@@ -76,11 +69,10 @@ See [`DATA_SCALE.md`](DATA_SCALE.md) for scale comparison with 100k+ image paper
 
 EfficientNet-B0 → Modality Transformer → Compression (8-D) → Classical head (Stage A) or VQC head (Stage B)
 
-## Paper B (histopath — active manuscript)
+## Paper B (histopath)
 
-- Manuscript: [`paper/main.tex`](paper/main.tex)
 - Code index: [`papers/paper_b/`](papers/paper_b/)
-- Checklist: [`paper/SUBMISSION_CHECKLIST.md`](paper/SUBMISSION_CHECKLIST.md)
+- Paths to cite: [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md)
 
 ## Paper A (tabular WBCD — separate publication)
 

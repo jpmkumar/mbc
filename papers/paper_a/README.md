@@ -14,19 +14,17 @@ reports hybrid gains.
 
 | Item | Status |
 |------|--------|
-| Pilot metrics (SVM / VQC / hybrid) | In `publication/publication_metrics.json` → `pilot_wbcd_tabular` |
+| Pilot metrics (SVM / VQC / hybrid) | Exploratory run, `pilot_wbcd_tabular` |
 | Rigorous patient/sample CV + matched controls | **To do** for journal submission |
-| Dedicated LaTeX manuscript | **Not started** (use this workspace when drafting) |
+| Manuscript | Maintained outside this repository |
 
 ## Directory layout
 
 | Path | Git | Purpose |
 |------|-----|---------|
-| [`AGENTS.md`](AGENTS.md) | yes | Agent brief |
-| [`SKILL.md`](SKILL.md) | yes | Portable Cursor skill |
+| [`CODE_AVAILABILITY.md`](CODE_AVAILABILITY.md) | yes | Paths to cite in the paper |
 | [`scripts/export_curated_metrics.py`](scripts/export_curated_metrics.py) | yes | Snapshot pilot + future runs |
 | [`results/`](results/) | **no** | Curated metrics |
-| [`assets/`](assets/) | **no** | Local notes, reference PDFs |
 
 ## Quick commands
 
@@ -36,7 +34,7 @@ python papers/paper_a/scripts/export_curated_metrics.py
 
 ## Pilot numbers (reference only — expand before submission)
 
-From `publication/publication_metrics.json`:
+From the exploratory pilot run:
 
 | Model | Accuracy | F1 | AUC |
 |-------|----------|-----|-----|
