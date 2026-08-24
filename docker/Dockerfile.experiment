@@ -1,0 +1,17 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG MBC_GIT_COMMIT
+
+LABEL org.opencontainers.image.title="MBC GPU experiments" \
+      org.opencontainers.image.revision="${MBC_GIT_COMMIT}"
+
+ENV MBC_GIT_COMMIT="${MBC_GIT_COMMIT}" \
+    PYTHONPATH=/opt/mbc
+
+# The build context is produced by `git archive`, so only files tracked by the
+# declared source revision enter the image.
+COPY . /opt/mbc
+RUN chmod -R a+rX /opt/mbc
+WORKDIR /opt/mbc
+

@@ -74,7 +74,7 @@ training:
   freeze_encoder_epochs: 3
   freeze_backbone_in_stage_b: true
   cache_frozen_backbone_features: true
-  classical_device: cpu
+  classical_device: auto
   quantum_device: cpu
   val_interval: 1
   checkpoint_interval: 1

@@ -1,0 +1,17 @@
+FROM nvcr.io/nvidia/pytorch:26.06-py3@sha256:43c018d6a12963f1a1bad85ef8574b5c2a978eec2be0ebcacfb87f69e0d210e1
+
+ENV PIP_ROOT_USER_ACTION=ignore \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY requirements-server.lock /tmp/requirements-server.lock
+
+# The lock is the exact delta from the digest-pinned NGC base image. Installing
+# without dependency resolution prevents a later package-index change from
+# silently altering the qualified environment.
+RUN python -m pip install --no-cache-dir --no-deps \
+      -r /tmp/requirements-server.lock \
+    && python -m pip check
+
+WORKDIR /opt/mbc
+

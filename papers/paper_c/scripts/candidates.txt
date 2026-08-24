@@ -1,0 +1,110 @@
+# Paper C candidate references: <bibkey> <DOI>
+# Verified with verify_crossref.py; only journal-article entries reach dlReferences.bib.
+
+# --- Epidemiology and clinical burden ---
+Bray2024                10.3322/caac.21834
+Giaquinto2024           10.3322/caac.21863
+Sung2021                10.3322/caac.21660
+
+# --- IDC dataset provenance and the classical IDC patch literature ---
+CruzRoa2017             10.1038/srep46450
+Janowczyk2016           10.4103/2153-3539.186902
+Spanhol2016             10.1109/TBME.2015.2496264
+Aresta2019              10.1016/j.media.2019.05.010
+Veta2019                10.1016/j.media.2019.02.012
+Abdallah2023            10.1038/s41598-023-46239-0
+Voon2022                10.1038/s41598-022-21848-3
+Pradeepa2025            10.1038/s41598-025-00930-6
+Ahmed2025IDC            10.2196/62996
+Swin2026DAMF            10.1038/s41598-026-37969-y
+
+# --- Evaluation integrity: leakage, patient-level splits, reporting ---
+Priyanka2026            10.3389/fdgth.2026.1752938
+Topology2026            10.1038/s41598-026-65826-5   volume=16
+Tampu2022               10.1038/s41597-022-01618-6
+Kapoor2023              10.1016/j.patter.2023.100804
+Rosenblatt2024          10.1038/s41467-024-46150-w
+Varoquaux2022           10.1038/s41746-022-00592-y
+Kim2019Design           10.3348/kjr.2019.0025
+Collins2024TRIPODAI     10.1136/bmj-2023-078378
+Tejani2024CLAIM         10.1148/ryai.240300
+
+# --- Site signatures, domain shift, stain variation ---
+Howard2021              10.1038/s41467-021-24698-1
+Stacke2021              10.1109/JBHI.2020.3032060
+Tellez2019              10.1016/j.media.2019.101544
+Vahadane2016            10.1109/TMI.2016.2529665
+Reinhard2001            10.1109/38.946629
+Schomig2021             10.1038/s41379-021-00859-x
+StainLUT2025            10.1038/s41746-025-02196-8
+StainBench2026          10.1038/s41598-026-40943-3
+Faryna2024              10.1016/j.compbiomed.2024.108018
+FMFairness2025          10.1038/s41467-025-66300-y
+
+# --- Pathology foundation models and self-supervised representations ---
+Chen2024UNI             10.1038/s41591-024-02857-3
+Lu2024CONCH             10.1038/s41591-024-02856-4
+Vorontsov2024Virchow    10.1038/s41591-024-03141-0
+Xu2024GigaPath          10.1038/s41586-024-07441-w
+Wang2024CHIEF           10.1038/s41586-024-07894-z
+Azizi2023               10.1038/s41551-023-01049-7
+Ciga2022                10.1016/j.mlwa.2021.100198
+
+# --- Weakly supervised / MIL / slide- and patient-level aggregation ---
+Campanella2019          10.1038/s41591-019-0508-1
+Lu2021CLAM              10.1038/s41551-020-00682-w
+SMMILe2025              10.1038/s43018-025-01060-8
+Bejnordi2017            10.1001/jama.2017.14585
+Bandi2019               10.1109/TMI.2018.2867350
+Bulten2022PANDA         10.1038/s41591-021-01620-2
+
+# --- Uncertainty, calibration, conformal prediction, deferral ---
+# TRUECAM (Nat Biomed Eng, 10.1038/s41551-026-01694-8) is advance online publication:
+# Crossref has no volume or pages yet. Re-verify and add before submission.
+UADFM2025               10.1038/s41746-025-02149-1
+LocalGradUQ2024         10.1088/1361-6560/ad611d
+Wang2019TTA             10.1016/j.neucom.2019.01.103
+VanCalster2019          10.1186/s12916-019-1466-7
+Vickers2006DCA          10.1177/0272989X06295361
+Vickers2016NetBenefit   10.1136/bmj.i6             volume=352
+
+# --- Clinical translation, human-AI collaboration, prognostic value ---
+Steiner2018             10.1097/PAS.0000000000001151
+Jaroensri2022           10.1038/s41523-022-00478-y
+Balkenhol2019           10.1038/s41374-019-0275-0
+Nagpal2019              10.1038/s41746-019-0112-2
+VanderLaak2021          10.1038/s41591-021-01343-4
+
+# --- Fairness and global equity ---
+Miyawaki2025            10.1016/j.ejca.2025.115394
+Subgroup2025            10.1371/journal.pdig.0000811
+
+# --- Efficiency, edge deployment, sustainability ---
+Lannelongue2021         10.1002/advs.202100707
+LightweightLung2026     10.1038/s41598-026-36652-6
+RadiomicVNet2025        10.1109/TCE.2025.3630000
+
+# --- Architectures, losses, explanation methods (journal versions only) ---
+Lin2020Focal            10.1109/TPAMI.2018.2858826
+Huang2022DenseNet       10.1109/TPAMI.2019.2918284
+Hu2020SENet             10.1109/TPAMI.2019.2913372
+Selvaraju2020GradCAM    10.1007/s11263-019-01228-7
+Buda2018Imbalance       10.1016/j.neunet.2018.07.011
+
+# --- Confounding, shortcut learning, cross-institution generalization ---
+Zech2018                10.1371/journal.pmed.1002683
+Geirhos2020Shortcut     10.1038/s42256-020-00257-z
+Perincheri2021          10.1038/s41379-021-00794-x
+
+# --- Privacy-preserving and multi-institution training ---
+Rieke2020Federated      10.1038/s41746-020-00323-1
+Sheller2020             10.1038/s41598-020-69250-1
+
+# --- Statistical comparison of learners and run-to-run variance ---
+Chicco2020MCC           10.1186/s12864-019-6413-7
+DeLong1988              10.2307/2531595
+Dietterich1998          10.1162/089976698300017197
+NadeauBengio2003        10.1023/A:1024068626366
+Renard2020              10.1038/s41598-020-69920-0
+Akesson2024             10.1016/j.compbiomed.2024.108944
+Saito2015               10.1371/journal.pone.0118432

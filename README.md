@@ -2,6 +2,19 @@
 
 Unified cross-modality breast cancer classification using EfficientNet-B0, Transformer-based modality-invariant learning, and an optional variational quantum circuit (VQC) head with multi-method explainability.
 
+**GitHub:** https://github.com/jpmkumar/mbc
+
+## Journal papers (code paths for citation)
+
+This repository supports **two papers**. Cite the **directory + release tag**, not the repo root alone.
+
+| Paper | Topic | Code path | Availability |
+|-------|-------|-----------|--------------|
+| **A** | Wisconsin Breast Cancer **tabular** hybrid QML | [`papers/paper_a/`](papers/paper_a/) | [`papers/paper_a/CODE_AVAILABILITY.md`](papers/paper_a/CODE_AVAILABILITY.md) |
+| **B** | IDC **histopathology** patches, patient-level CV | [`papers/paper_b/`](papers/paper_b/) | [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md) |
+
+Tag a release before submission (e.g. `paper-b-v1.0`) so the URL is frozen. Details: [`papers/README.md`](papers/README.md).
+
 ## Primary result (CBIS-DDSM mammography)
 
 | Metric | Enhanced Stage A |
@@ -36,6 +49,8 @@ configs/              YAML configs (default, mammo_enhanced, benedetti_vqc)
 data/download/        CBIS-DDSM, BUSI download scripts
 src/                  Models, training, data pipeline
 experiments/          run_training.py, generate_figures.py
+preregistration/      Protocols declared before the confirmatory runs
+papers/               Per-paper code index and availability paths
 scripts/              Training, evaluation, and analysis entry points
 ```
 
@@ -54,9 +69,16 @@ See [`DATA_SCALE.md`](DATA_SCALE.md) for scale comparison with 100k+ image paper
 
 EfficientNet-B0 → Modality Transformer → Compression (8-D) → Classical head (Stage A) or VQC head (Stage B)
 
+## Paper B (histopath)
+
+- Code index: [`papers/paper_b/`](papers/paper_b/)
+- Paths to cite: [`papers/paper_b/CODE_AVAILABILITY.md`](papers/paper_b/CODE_AVAILABILITY.md)
+
+## Paper A (tabular WBCD — separate publication)
+
+- Code index: [`papers/paper_a/`](papers/paper_a/)
+
 ## Scope
 
 This repository is a code release. Manuscript sources, figure artwork, and
 submission material are maintained separately.
-
-- GitHub: https://github.com/jpmkumar/mbc

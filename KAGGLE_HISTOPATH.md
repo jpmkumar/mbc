@@ -482,6 +482,128 @@ backup_mbc("final_cv_summary")
 
 ---
 
+## E3 expressivity ablation — fold 0 (qubits 4/12, entanglement none)
+
+**Goal:** Test whether VQC width or CNOT entanglement explains the null result vs E2b on fold 0.
+
+**Baseline already done (do not re-run):** E3 fold 0, 8 qubits, linear entanglement → `results/histopath_kaggle_fold0_e3_v2/` (bal_acc 0.886, F1 0.816).
+
+| Run | CLI flags | Backup label | Expected time |
+|-----|-----------|--------------|---------------|
+| A | `--entanglement none` | `fold0_e3_entnone` | ~3–5 h |
+| B | `--n-qubits 4` | `fold0_e3_q4` | ~3–5 h |
+| C | `--n-qubits 12` | `fold0_e3_q12` | ~4–6 h (wider circuit) |
+
+Checkpoints are tagged automatically (`…_q4`, `…_entnone`, etc.) so they will not overwrite the baseline.
+
+### Option A — One ablation per Save & Run All (recommended)
+
+Use the **Quick single-fold** block above with these settings:
+
+**Run A — no entanglement**
+
+```python
+FOLD = 0
+EXPERIMENT = "E3"
+ABLATION_FLAGS = "--entanglement none"
+BACKUP_LABEL = "fold0_e3_entnone"
+```
+
+**Cell 4 — train (replace default train cell)**
+
+```python
+if not os.path.isfile("data/splits/histopath/folds/fold_0/train.csv"):
+    !python data/download/split_histopath_archive.py \
+      --archive-path "{ARCHIVE}" --mode cv --folds 5
+
+!python scripts/train_histopath_cv.py \
+  --fold {FOLD} --experiment {EXPERIMENT} \
+  --archive-path "{ARCHIVE}" {ABLATION_FLAGS}
+```
+
+**Cell 5 — backup**
+
+```python
+# use BACKUP_LABEL instead of f"fold{FOLD}_{EXPERIMENT.lower()}"
+label = BACKUP_LABEL
+# ... same backup zip logic as Quick block, with `label`
+```
+
+Repeat Save & Run All for **Run B** (`ABLATION_FLAGS = "--n-qubits 4"`, `BACKUP_LABEL = "fold0_e3_q4"`) and **Run C** (`--n-qubits 12`, `fold0_e3_q12`).
+
+### Option B — All three ablations in one session (~12–15 h)
+
+Requires **GPU T4 ×2**, dataset attached, and **Internet On**. May hit Kaggle’s 12 h cap — use Option A if it stops early.
+
+**After Cells 0.1–0.4 (clone, pip, ARCHIVE, GPU):**
+
+```python
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+ARCHIVE = ARCHIVE  # from Cell 0.3
+assert ARCHIVE and Path(ARCHIVE).exists(), "Attach Breast Histopathology dataset"
+
+if not Path("data/splits/histopath/folds/fold_0/train.csv").exists():
+    !python data/download/split_histopath_archive.py \
+      --archive-path "{ARCHIVE}" --mode cv --folds 5
+
+def backup_mbc(label: str):
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    backup = Path(f"/kaggle/working/mbc_backup_{stamp}_{label}")
+    backup.mkdir(parents=True, exist_ok=True)
+    for src, name in [(Path("results/histopath"), "histopath"),
+                      (Path("data/splits/histopath"), "splits")]:
+        if src.exists():
+            shutil.copytree(src, backup / name, dirs_exist_ok=True)
+    zip_path = Path(f"/kaggle/working/mbc_histopath_{stamp}_{label}.zip")
+    !cd /kaggle/working && zip -rq {zip_path.name} {backup.name}
+    print("Wrote", zip_path, "size", zip_path.stat().st_size // (1024*1024), "MB")
+    return zip_path
+
+ABLATIONS = [
+    ("fold0_e3_entnone", ["--entanglement", "none"]),
+    ("fold0_e3_q4", ["--n-qubits", "4"]),
+    ("fold0_e3_q12", ["--n-qubits", "12"]),
+]
+
+for label, extra in ABLATIONS:
+    print("\n" + "=" * 60)
+    print("START", label, extra)
+    cmd = [
+        "python", "scripts/train_histopath_cv.py",
+        "--fold", "0", "--experiment", "E3",
+        "--archive-path", ARCHIVE,
+    ] + extra
+    subprocess.run(cmd, check=True)
+    backup_mbc(label)
+    print("DONE", label)
+```
+
+### Local unpack paths (after download)
+
+```bash
+REPO="/Users/muthu/ResTest/paper1/mbc"
+unzip ~/Downloads/mbc_histopath_*_fold0_e3_entnone.zip -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_entnone/"
+unzip ~/Downloads/mbc_histopath_*_fold0_e3_q4.zip       -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_q4/"
+unzip ~/Downloads/mbc_histopath_*_fold0_e3_q12.zip      -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_q12/"
+```
+
+### What to compare (paper supplementary)
+
+| Config | qubits | entanglement | vs baseline E3 fold 0 |
+|--------|--------|--------------|------------------------|
+| Baseline | 8 | linear | 0.886 / 0.816 F1 |
+| A | 8 | **none** | Is CNOT helping? |
+| B | **4** | linear | Under-expressive? |
+| C | **12** | linear | More expressivity helps? |
+
+Log `best_stage`, AUPRC, and whether VQC stage B/C ever beats stage A.
+
+---
+
 ## Stage 4 — Copy results to Mac
 
 After downloading zips from Kaggle:

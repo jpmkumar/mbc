@@ -11,11 +11,66 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.data.preprocessing import preprocess_cache_tag
-from src.utils.metrics import compute_metrics
+from src.utils.metrics import (
+    compute_metrics,
+    compute_metrics_at_threshold,
+    threshold_for_target_recall,
+    threshold_sweep,
+)
 
 from .accelerator import amp_device_type, configure_runtime, maybe_compile_model
 from .feature_cache import build_feature_loader, extract_compressed_features
 from .losses import FocalLoss, compute_class_weights
+
+
+def _tta_views(images: torch.Tensor) -> list[torch.Tensor]:
+    return [
+        images,
+        torch.flip(images, dims=[3]),
+        torch.flip(images, dims=[2]),
+        torch.rot90(images, k=1, dims=[2, 3]),
+        torch.rot90(images, k=2, dims=[2, 3]),
+        torch.rot90(images, k=3, dims=[2, 3]),
+    ]
+
+
+@torch.no_grad()
+def _evaluate_model_at_threshold(
+    model: nn.Module,
+    loader,
+    device: torch.device,
+    threshold: float,
+    tta: bool,
+) -> dict:
+    """Evaluate raw image batches while retaining labels and probabilities."""
+    model.eval()
+    all_labels, all_probs = [], []
+    for batch in loader:
+        images = batch["image"].to(device)
+        labels = batch["label"].to(device)
+        modality_ids = batch["modality_id"].to(device)
+
+        if tta:
+            views = _tta_views(images)
+            prob_sum = None
+            for view in views:
+                logits = model(view, modality_ids)
+                probabilities = torch.softmax(logits.float(), dim=1)
+                prob_sum = (
+                    probabilities if prob_sum is None else prob_sum + probabilities
+                )
+            probabilities = prob_sum / len(views)
+        else:
+            logits = model(images, modality_ids)
+            probabilities = torch.softmax(logits.float(), dim=1)
+
+        all_labels.extend(labels.cpu().numpy())
+        all_probs.extend(probabilities[:, 1].cpu().numpy())
+
+    metrics = compute_metrics_at_threshold(all_labels, all_probs, threshold)
+    metrics["labels"] = all_labels
+    metrics["probs"] = all_probs
+    return metrics
 
 
 def filter_compatible_state_dict(
@@ -131,9 +186,19 @@ class HybridTrainer:
             self.criterion = nn.CrossEntropyLoss(weight=weights)
 
         self.history = {"train_loss": [], "val_metrics": []}
-        self.best_score = -1.0
+        self.best_score = -math.inf
         self.best_state = None
         self.best_stage = "stage_a"
+        self.best_by_stage = {
+            stage: {
+                "score": -math.inf,
+                "state_dict": None,
+                "stage_epoch": None,
+                "global_epoch": None,
+                "val_metrics": None,
+            }
+            for stage in self.STAGES
+        }
         self.stage_epochs_done = {s: 0 for s in self.STAGES}
         self.total_epochs = 0
         self._epochs_without_improvement = 0
@@ -333,7 +398,20 @@ class HybridTrainer:
                 amp_device_type=self.amp_device_type,
             )
 
-        payload = {"train": cached_train, "val": cached_val, "test": cached_test}
+        payload = {
+            "train": cached_train,
+            "val": cached_val,
+            "test": cached_test,
+            "metadata": {
+                "feature_cache_format_version": 3,
+                "contains_patient_ids": True,
+                "source_stage": "stage_a",
+                "source_checkpoint": str(
+                    self._best_stage_ckpt_path("stage_a")
+                ),
+                **self._checkpoint_metadata(),
+            },
+        }
         torch.save(payload, cache_path)
         print(f"Saved feature cache to {cache_path}")
 
@@ -347,6 +425,29 @@ class HybridTrainer:
             self._feature_loaders["test"] = build_feature_loader(
                 cached_test, self.batch_size, shuffle=False
             )
+
+    def prepare_stage_a_feature_cache(self) -> Path:
+        """Restore the best Stage-A backbone and export frozen features."""
+        if not getattr(self.model, "use_quantum", False):
+            raise ValueError("Stage-A feature caching requires a hybrid model.")
+        stage_record = self.best_by_stage["stage_a"]
+        if stage_record["state_dict"] is None:
+            raise RuntimeError(
+                "No Stage-A checkpoint is available. Train Stage A first."
+            )
+
+        filtered, _ = filter_compatible_state_dict(
+            self.model, stage_record["state_dict"]
+        )
+        self.model.load_state_dict(filtered, strict=False)
+        if hasattr(self.model, "set_training_stage"):
+            self.model.set_training_stage("stage_a")
+        if hasattr(self.model, "set_backbone_eval_mode"):
+            self.model.set_backbone_eval_mode(True)
+
+        self._feature_loaders.clear()
+        self._prepare_feature_loaders("stage_b")
+        return self._feature_cache_path()
 
     def _loader_with_batch_size(
         self, loader: DataLoader, batch_size: int, shuffle: bool = False
@@ -555,24 +656,115 @@ class HybridTrainer:
     def _best_ckpt_path(self) -> Path:
         return self.ckpt_dir / f"{self.experiment_name}.pt"
 
+    def _best_stage_ckpt_path(self, stage: str) -> Path:
+        if stage not in self.STAGES:
+            raise ValueError(f"Unknown training stage: {stage}")
+        return self.ckpt_dir / f"{self.experiment_name}_best_{stage}.pt"
+
     def _progress_path(self) -> Path:
         return self.results_dir / f"{self.experiment_name}_progress.json"
 
+    def _stage_comparison_path(self) -> Path:
+        return self.results_dir / f"{self.experiment_name}_stage_comparison.json"
+
+    @staticmethod
+    def _snapshot_state(model: nn.Module) -> dict[str, torch.Tensor]:
+        return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+    @staticmethod
+    def _serializable_metrics(metrics: dict | None) -> dict | None:
+        if metrics is None:
+            return None
+        return {
+            k: v
+            for k, v in metrics.items()
+            if k not in ("labels", "preds", "probs", "roc")
+        }
+
+    @staticmethod
+    def _add_specificity(metrics: dict) -> dict:
+        result = dict(metrics)
+        cm = result.get("confusion_matrix")
+        if (
+            isinstance(cm, list)
+            and len(cm) == 2
+            and all(isinstance(row, list) and len(row) == 2 for row in cm)
+        ):
+            tn, fp = cm[0]
+            result["specificity"] = float(tn / max(tn + fp, 1))
+        return result
+
+    def _best_by_stage_summary(self) -> dict:
+        summary = {}
+        for stage, record in self.best_by_stage.items():
+            if record["state_dict"] is None:
+                continue
+            summary[stage] = {
+                "score": record["score"],
+                "stage_epoch": record["stage_epoch"],
+                "global_epoch": record["global_epoch"],
+                "val_metrics": record["val_metrics"],
+                "checkpoint": str(self._best_stage_ckpt_path(stage)),
+            }
+        return summary
+
+    def _checkpoint_metadata(self) -> dict:
+        return {
+            "format_version": 2,
+            "experiment_name": self.experiment_name,
+            "selection_metric": self.selection_metric,
+            "config": self.config,
+            "stage_epochs_done": dict(self.stage_epochs_done),
+            "total_epochs": self.total_epochs,
+        }
+
+    def _save_stage_best_checkpoint(self, stage: str):
+        record = self.best_by_stage[stage]
+        if record["state_dict"] is None:
+            return
+        payload = {
+            **self._checkpoint_metadata(),
+            "checkpoint_type": "stage_best",
+            "model_state_dict": record["state_dict"],
+            "stage": stage,
+            "best_stage": stage,
+            "best_val_score": record["score"],
+            "stage_epoch": record["stage_epoch"],
+            "global_epoch": record["global_epoch"],
+            "val_metrics": record["val_metrics"],
+        }
+        torch.save(payload, self._best_stage_ckpt_path(stage))
+
+    def _save_global_best_checkpoint(self):
+        if self.best_state is None:
+            return
+        payload = {
+            **self._checkpoint_metadata(),
+            "checkpoint_type": "global_best",
+            "model_state_dict": self.best_state,
+            # Retain this key for existing inference/export consumers.
+            "best_state_dict": self.best_state,
+            "best_score": self.best_score,
+            "best_val_score": self.best_score,
+            "best_stage": self.best_stage,
+            "stage": self.best_stage,
+            "best_by_stage": self._best_by_stage_summary(),
+        }
+        torch.save(payload, self._best_ckpt_path())
+
     def _save_checkpoint(self, stage_name: str):
         payload = {
+            **self._checkpoint_metadata(),
+            "checkpoint_type": "latest",
             "model_state_dict": {k: v.cpu() for k, v in self.model.state_dict().items()},
             "best_state_dict": self.best_state,
             "best_score": self.best_score,
-            "total_epochs": self.total_epochs,
-            "stage_epochs_done": dict(self.stage_epochs_done),
             "history": self.history,
-            "experiment_name": self.experiment_name,
             "current_stage": stage_name,
             "best_stage": self.best_stage,
+            "best_by_stage": self._best_by_stage_summary(),
         }
         torch.save(payload, self._latest_ckpt_path())
-        if self.best_state:
-            torch.save(self.best_state, self._best_ckpt_path())
 
         progress = {
             "experiment": self.experiment_name,
@@ -585,6 +777,7 @@ class HybridTrainer:
             },
             "best_score": self.best_score,
             "best_stage": self.best_stage,
+            "best_by_stage": self._best_by_stage_summary(),
             "latest_checkpoint": str(self._latest_ckpt_path()),
             "best_checkpoint": str(self._best_ckpt_path()),
         }
@@ -619,19 +812,68 @@ class HybridTrainer:
             merged.update({k: v.cpu().clone() for k, v in filtered.items()})
         return merged
 
+    def _restore_best_by_stage(self, summary: dict | None):
+        if not summary:
+            return
+        for stage, metadata in summary.items():
+            if stage not in self.best_by_stage:
+                continue
+            checkpoint_path = self._best_stage_ckpt_path(stage)
+            recorded_path = metadata.get("checkpoint")
+            if not checkpoint_path.exists() and recorded_path:
+                checkpoint_path = Path(recorded_path)
+
+            state_dict = None
+            if checkpoint_path.exists():
+                stage_ckpt = torch.load(
+                    checkpoint_path, map_location="cpu", weights_only=False
+                )
+                if isinstance(stage_ckpt, dict):
+                    state_dict = stage_ckpt.get("model_state_dict")
+
+            self.best_by_stage[stage] = {
+                "score": float(metadata.get("score", -1.0)),
+                "state_dict": state_dict,
+                "stage_epoch": metadata.get("stage_epoch"),
+                "global_epoch": metadata.get("global_epoch"),
+                "val_metrics": metadata.get("val_metrics"),
+            }
+
     def _load_checkpoint(self, resume_path: Path):
         ckpt = torch.load(resume_path, map_location="cpu", weights_only=False)
 
         if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
             self._load_state_dict_lenient(ckpt["model_state_dict"], "model")
             self.best_state = self._merge_best_state(ckpt.get("best_state_dict"))
-            self.best_score = ckpt.get("best_score", -1.0)
-            self.best_stage = ckpt.get("best_stage", "stage_a")
+            self.best_score = ckpt.get(
+                "best_score", ckpt.get("best_val_score", -math.inf)
+            )
+            self.best_stage = ckpt.get("best_stage", ckpt.get("stage", "stage_a"))
             self.total_epochs = ckpt.get("total_epochs", 0)
             self.stage_epochs_done.update(ckpt.get("stage_epochs_done", {}))
             self.history = ckpt.get("history", self.history)
+            self._restore_best_by_stage(ckpt.get("best_by_stage"))
+            if (
+                self.best_state is not None
+                and self.best_by_stage[self.best_stage]["state_dict"] is None
+            ):
+                self.best_by_stage[self.best_stage] = {
+                    "score": self.best_score,
+                    "state_dict": self._merge_best_state(self.best_state),
+                    "stage_epoch": self.stage_epochs_done.get(self.best_stage),
+                    "global_epoch": self.total_epochs,
+                    "val_metrics": None,
+                }
+            loaded_stage = ckpt.get(
+                "current_stage", ckpt.get("stage", self.best_stage)
+            )
+            if hasattr(self.model, "set_training_stage"):
+                self.model.set_training_stage(loaded_stage)
             print(f"Resumed from {resume_path}")
-            print(f"  total_epochs={self.total_epochs}, stage progress={self.stage_epochs_done}")
+            print(
+                f"  total_epochs={self.total_epochs}, "
+                f"stage progress={self.stage_epochs_done}, route={loaded_stage}"
+            )
             return
 
         if isinstance(ckpt, dict):
@@ -640,6 +882,138 @@ class HybridTrainer:
             raise TypeError(f"Unsupported checkpoint format: {type(ckpt)}")
         self.best_state = self._merge_best_state(ckpt if isinstance(ckpt, dict) else None)
         print(f"Loaded legacy weights from {resume_path}")
+
+    def _select_stage_threshold(self, val_full: dict) -> tuple[float, dict]:
+        train_cfg = self.config.get("training", {})
+        default_threshold = float(train_cfg.get("eval_threshold", 0.5))
+        metric_name = str(train_cfg.get("threshold_metric", "f1"))
+        meta = {
+            "tuned": False,
+            "threshold": default_threshold,
+            "threshold_metric": metric_name,
+            "val_score_at_threshold": None,
+        }
+        if not train_cfg.get("tune_threshold", False):
+            return default_threshold, meta
+
+        if metric_name == "recall_target":
+            target_recall = float(train_cfg.get("target_recall", 0.90))
+            threshold, best = threshold_for_target_recall(
+                val_full["labels"],
+                val_full["probs"],
+                target_recall=target_recall,
+            )
+            score = float(best["recall"])
+        elif metric_name == "fbeta":
+            beta = float(train_cfg.get("fbeta_beta", 1.5))
+            _, best = threshold_sweep(
+                val_full["labels"],
+                val_full["probs"],
+                metric="fbeta",
+                beta=beta,
+            )
+            threshold = float(best["threshold"])
+            score = float(best["fbeta"])
+        else:
+            _, best = threshold_sweep(
+                val_full["labels"],
+                val_full["probs"],
+                metric=metric_name,
+            )
+            threshold = float(best["threshold"])
+            score = float(best.get(metric_name, best["f1"]))
+
+        meta.update(
+            {
+                "tuned": True,
+                "threshold": float(threshold),
+                "val_score_at_threshold": score,
+                "val_metrics_at_threshold": self._serializable_metrics(
+                    self._add_specificity(best)
+                ),
+            }
+        )
+        return float(threshold), meta
+
+    def _evaluate_stage_attribution(self) -> dict:
+        """Evaluate each stage's own validation-selected checkpoint and routing."""
+        if not getattr(self.model, "use_quantum", False):
+            return {}
+
+        train_cfg = self.config.get("training", {})
+        tta = bool(train_cfg.get("tta", False))
+        comparison = {
+            "experiment": self.experiment_name,
+            "selection_metric": self.selection_metric,
+            "global_best_stage": self.best_stage,
+            "tta": tta,
+            "stages": {},
+        }
+
+        for stage in self.STAGES:
+            record = self.best_by_stage[stage]
+            if record["state_dict"] is None:
+                continue
+
+            filtered, _ = filter_compatible_state_dict(
+                self.model, record["state_dict"]
+            )
+            self.model.load_state_dict(filtered, strict=False)
+            if hasattr(self.model, "set_training_stage"):
+                self.model.set_training_stage(stage)
+
+            val_full = _evaluate_model_at_threshold(
+                self.model,
+                self.val_loader,
+                self.classical_device,
+                threshold=float(train_cfg.get("eval_threshold", 0.5)),
+                tta=tta,
+            )
+            threshold, threshold_meta = self._select_stage_threshold(val_full)
+            val_metrics = compute_metrics_at_threshold(
+                val_full["labels"], val_full["probs"], threshold
+            )
+            val_metrics = self._add_specificity(val_metrics)
+
+            test_metrics = None
+            if self.test_loader is not None:
+                test_metrics = _evaluate_model_at_threshold(
+                    self.model,
+                    self.test_loader,
+                    self.classical_device,
+                    threshold=threshold,
+                    tta=tta,
+                )
+                test_metrics = self._add_specificity(test_metrics)
+
+            comparison["stages"][stage] = {
+                "checkpoint": str(self._best_stage_ckpt_path(stage)),
+                "stage_epoch": record["stage_epoch"],
+                "global_epoch": record["global_epoch"],
+                "best_val_selection_score": record["score"],
+                "threshold_tuning": threshold_meta,
+                "validation_metrics": self._serializable_metrics(val_metrics),
+                "test_metrics": self._serializable_metrics(test_metrics),
+            }
+
+        selected = comparison["stages"].get(self.best_stage)
+        if selected is not None:
+            comparison["global_selected"] = {
+                "stage": self.best_stage,
+                **selected,
+            }
+
+        # The caller and downstream threshold evaluation expect the global best
+        # checkpoint and its matching head route to remain active.
+        if self.best_state is not None:
+            filtered, _ = filter_compatible_state_dict(self.model, self.best_state)
+            self.model.load_state_dict(filtered, strict=False)
+            if hasattr(self.model, "set_training_stage"):
+                self.model.set_training_stage(self.best_stage)
+
+        with open(self._stage_comparison_path(), "w") as f:
+            json.dump(comparison, f, indent=2)
+        return comparison
 
     def train(
         self,
@@ -673,32 +1047,57 @@ class HybridTrainer:
                 loss = self._run_epoch(optimizer, self.total_epochs, stage_name)
                 epoch_num = epoch + 1
                 val_metrics = None
+                stage_improved = False
+                global_improved = False
 
                 if epoch_num % self.val_interval == 0 or epoch_num == n_epochs:
                     val_metrics = self.evaluate(split="val" if self._feature_loaders else None)
                     self.history["train_loss"].append(loss)
                     self.history["val_metrics"].append(
                         {
-                            k: v
-                            for k, v in val_metrics.items()
-                            if k not in ("labels", "preds", "probs", "roc")
+                            "stage": stage_name,
+                            "stage_epoch": epoch_num,
+                            "global_epoch": self.total_epochs + 1,
+                            **{
+                                k: v
+                                for k, v in val_metrics.items()
+                                if k not in ("labels", "preds", "probs", "roc")
+                            },
                         }
                     )
 
                     score = self._score(val_metrics)
-                    if score > self.best_score:
-                        self.best_score = score
-                        self.best_stage = stage_name
-                        self.best_state = {
-                            k: v.cpu().clone()
-                            for k, v in self.model.state_dict().items()
-                        }
+                    stage_record = self.best_by_stage[stage_name]
+                    stage_improved = score > stage_record["score"]
+                    snapshot = None
+                    if stage_improved:
+                        snapshot = self._snapshot_state(self.model)
+                        stage_record.update(
+                            {
+                                "score": score,
+                                "state_dict": snapshot,
+                                "stage_epoch": epoch_num,
+                                "global_epoch": self.total_epochs + 1,
+                                "val_metrics": self._serializable_metrics(val_metrics),
+                            }
+                        )
                         self._epochs_without_improvement = 0
                     else:
                         self._epochs_without_improvement += 1
 
+                    if score > self.best_score:
+                        global_improved = True
+                        self.best_score = score
+                        self.best_stage = stage_name
+                        self.best_state = snapshot or self._snapshot_state(self.model)
+
                 self.total_epochs += 1
                 self.stage_epochs_done[stage_name] = epoch_num
+
+                if stage_improved:
+                    self._save_stage_best_checkpoint(stage_name)
+                if global_improved:
+                    self._save_global_best_checkpoint()
 
                 if epoch_num % self.checkpoint_interval == 0 or epoch_num == n_epochs:
                     self._save_checkpoint(stage_name)
@@ -711,7 +1110,9 @@ class HybridTrainer:
                     )
                 print(
                     f"{stage_name} epoch {epoch_num}/{n_epochs} | "
-                    f"loss={loss:.4f} | {metric_str}best={self.best_score:.3f}"
+                    f"loss={loss:.4f} | {metric_str}"
+                    f"stage_best={self.best_by_stage[stage_name]['score']:.3f} | "
+                    f"global_best={self.best_score:.3f}"
                 )
 
                 if (
@@ -748,6 +1149,12 @@ class HybridTrainer:
         final_metrics["best_stage"] = self.best_stage
         final_metrics["stage_epochs_done"] = dict(self.stage_epochs_done)
 
+        stage_comparison = self._evaluate_stage_attribution()
+        if stage_comparison:
+            final_metrics["stage_comparison_path"] = str(
+                self._stage_comparison_path()
+            )
+
         serializable = {
             k: v
             for k, v in final_metrics.items()
@@ -757,8 +1164,7 @@ class HybridTrainer:
         with open(out_path, "w") as f:
             json.dump(serializable, f, indent=2)
 
-        if self.best_state:
-            torch.save(self.best_state, self._best_ckpt_path())
+        self._save_global_best_checkpoint()
         self._save_checkpoint(stages[-1][0])
 
         history_path = self.results_dir / f"{self.experiment_name}_history.json"

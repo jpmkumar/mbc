@@ -1,0 +1,75 @@
+{
+  "selection_endpoint": "validation_auprc",
+  "exploratory_only": true,
+  "held_out_test_evaluated": false,
+  "best_by_model": {
+    "mlp": {
+      "feature_transform": "raw",
+      "learning_rate": 0.001,
+      "model": "mlp",
+      "seeds": 3,
+      "mean_best_val_auprc": 0.9437781983172092,
+      "std_best_val_auprc": 8.813296500231563e-05,
+      "mean_best_val_auc": 0.9449793497721354,
+      "std_best_val_auc": 8.708717048519596e-06,
+      "mean_best_val_tuned_balanced_accuracy": 0.87646484375,
+      "std_best_val_tuned_balanced_accuracy": 0.0,
+      "mean_best_train_tuned_balanced_accuracy": 0.943115234375,
+      "mean_runtime_s": 6.876524845759074
+    },
+    "vqc": {
+      "feature_transform": "raw",
+      "learning_rate": 0.01,
+      "model": "vqc",
+      "seeds": 3,
+      "mean_best_val_auprc": 0.9432135708100422,
+      "std_best_val_auprc": 9.232077270480164e-05,
+      "mean_best_val_auc": 0.944963296254476,
+      "std_best_val_auc": 1.688269925216194e-05,
+      "mean_best_val_tuned_balanced_accuracy": 0.87646484375,
+      "std_best_val_tuned_balanced_accuracy": 0.0,
+      "mean_best_train_tuned_balanced_accuracy": 0.943115234375,
+      "mean_runtime_s": 201.34665520985922
+    }
+  },
+  "best_vqc_minus_mlp_val_auprc": -0.0005646275071670148,
+  "matched_setting_deltas": [
+    {
+      "feature_transform": "raw",
+      "learning_rate": 0.001,
+      "vqc_minus_mlp_val_auprc": -0.0014581697978566233,
+      "vqc_minus_mlp_val_auc": -0.0004647572835285718
+    },
+    {
+      "feature_transform": "raw",
+      "learning_rate": 0.003,
+      "vqc_minus_mlp_val_auprc": -0.0008444675910553867,
+      "vqc_minus_mlp_val_auc": -6.0240427652957784e-05
+    },
+    {
+      "feature_transform": "raw",
+      "learning_rate": 0.01,
+      "vqc_minus_mlp_val_auprc": 0.0006910656214762501,
+      "vqc_minus_mlp_val_auc": 5.944569905602659e-05
+    },
+    {
+      "feature_transform": "standardize",
+      "learning_rate": 0.001,
+      "vqc_minus_mlp_val_auprc": -0.004185215462204295,
+      "vqc_minus_mlp_val_auc": -0.001937548319498661
+    },
+    {
+      "feature_transform": "standardize",
+      "learning_rate": 0.003,
+      "vqc_minus_mlp_val_auprc": -0.000928829041213608,
+      "vqc_minus_mlp_val_auc": -0.0006612141927083703
+    },
+    {
+      "feature_transform": "standardize",
+      "learning_rate": 0.01,
+      "vqc_minus_mlp_val_auprc": -0.0006341519214605462,
+      "vqc_minus_mlp_val_auc": -0.00038401285807287966
+    }
+  ],
+  "verdict": "The best VQC and matched MLP are within 0.01 validation AUPRC. Treat the frozen-head pilot as practically tied and proceed to representation and Stage-C stability analysis."
+}
