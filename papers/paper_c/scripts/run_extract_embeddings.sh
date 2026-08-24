@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Launch one embedding-extraction pass in the Paper C image with full provenance.
 # Usage: run_extract_embeddings.sh ENCODER TRANSFORM [extra args...]
-#   e.g. run_extract_embeddings.sh uni upsample224
-#        run_extract_embeddings.sh uni mosaic3 --limit 5000
+#   e.g. run_extract_embeddings.sh uni2_h upsample224
+#        run_extract_embeddings.sh uni2_h mosaic3 --centre-limit 5000 --run-name smoke
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
@@ -28,28 +28,26 @@ CACHE_DIR="$PRIMARY_ROOT/cache"
 EMB_DIR="$PRIMARY_ROOT/embeddings"
 LOG_DIR="$PRIMARY_ROOT/logs"
 
-if [[ ! -d "$DATASET_DIR" ]]; then
-  echo "Dataset not found: $DATASET_DIR" >&2
-  exit 1
-fi
+for path in "$DATASET_DIR" "$DATASET_SHA_FILE"; do
+  if [[ ! -e "$path" ]]; then
+    echo "Required artifact not found: $path" >&2
+    exit 1
+  fi
+done
 mkdir -p "$CACHE_DIR" "$EMB_DIR" "$LOG_DIR"
 
-DATASET_SHA=""
-[[ -f "$DATASET_SHA_FILE" ]] && DATASET_SHA="$(awk 'NR == 1 {print $1}' "$DATASET_SHA_FILE")"
+DATASET_SHA="$(awk 'NR == 1 {print $1}' "$DATASET_SHA_FILE")"
 
-# HF_TOKEN is required for the gated encoders. Keep it in $PRIMARY_ROOT/.env,
-# which is outside the repository. Never commit it.
-if [[ -f "$PRIMARY_ROOT/.env" ]]; then
-  # shellcheck disable=SC1091
-  source "$PRIMARY_ROOT/.env"
-fi
-if [[ -z "${HF_TOKEN:-}" ]]; then
-  echo "HF_TOKEN is not set. UNI and Virchow are gated and will fail to download." >&2
-  echo "Put HF_TOKEN=... in $PRIMARY_ROOT/.env" >&2
+# Mount the token as a read-only secret rather than embedding it in Docker's
+# container configuration. The file contains only the token, with no KEY= prefix.
+HF_TOKEN_FILE="${HF_TOKEN_FILE:-$PRIMARY_ROOT/hf_token}"
+if [[ ! -f "$HF_TOKEN_FILE" ]]; then
+  echo "Hugging Face token file not found: $HF_TOKEN_FILE" >&2
+  echo "Write the token only (hf_...) and chmod 600 the file." >&2
   exit 1
 fi
 
-RUN_LOG="$LOG_DIR/paperc_embed_${ENCODER}_${TRANSFORM}.log"
+RUN_LOG="$LOG_DIR/paperc_embed_${ENCODER}_${TRANSFORM}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
 docker run --rm \
   --gpus device=0 \
@@ -60,7 +58,6 @@ docker run --rm \
   --env XDG_CACHE_HOME=/cache \
   --env TORCH_HOME=/cache/torch \
   --env HF_HOME=/cache/huggingface \
-  --env "HF_TOKEN=$HF_TOKEN" \
   --env "MBC_GIT_COMMIT=$MBC_GIT_COMMIT" \
   --env "MBC_IMAGE_ID=$MBC_IMAGE_ID" \
   --env "MBC_ENV_LOCK_SHA=$MBC_ENV_LOCK_SHA" \
@@ -69,10 +66,11 @@ docker run --rm \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   --mount type=bind,src="$DATASET_DIR",dst=/datasets/histopath,readonly \
+  --mount type=bind,src="$HF_TOKEN_FILE",dst=/run/secrets/hf_token,readonly \
   --mount type=bind,src="$CACHE_DIR",dst=/cache \
   --mount type=bind,src="$EMB_DIR",dst=/outputs \
   "$MBC_IMAGE" \
-  python papers/paper_c/scripts/extract_embeddings.py \
+  bash -lc 'export HF_TOKEN="$(< /run/secrets/hf_token)"; exec python papers/paper_c/scripts/extract_embeddings.py "$@"' -- \
     --encoder "$ENCODER" \
     --transform "$TRANSFORM" \
     --archive-path /datasets/histopath \

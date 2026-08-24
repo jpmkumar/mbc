@@ -1,0 +1,52 @@
+{
+  "uni2_h": {
+    "provider": "timm",
+    "repo_id": "MahmoodLab/UNI2-h",
+    "revision": "d517a8dd47902dd7c308b3c36f63bce47e7b9a43",
+    "expected_dim": 1536,
+    "pooling": "vector",
+    "batch_size_a4000": 8,
+    "license": "CC-BY-NC-ND-4.0",
+    "redistribute_embeddings": false
+  },
+  "virchow2": {
+    "provider": "timm",
+    "repo_id": "paige-ai/Virchow2",
+    "revision": "3158645804b69e3f3bc4439d4116edddf0840a72",
+    "expected_dim": 2560,
+    "pooling": "cls_plus_mean_skip_5",
+    "batch_size_a4000": 8,
+    "license": "CC-BY-NC-ND-4.0",
+    "redistribute_embeddings": false
+  },
+  "phikon_v2": {
+    "provider": "transformers",
+    "repo_id": "owkin/phikon-v2",
+    "revision": "2ae989a9c40cffaa27f0a6cb29cc94d1d6f9a5fd",
+    "expected_dim": 1024,
+    "pooling": "cls",
+    "batch_size_a4000": 16,
+    "license": "Owkin non-commercial research licence",
+    "redistribute_embeddings": false
+  },
+  "dinov2_vitl14": {
+    "provider": "timm",
+    "repo_id": "timm/vit_large_patch14_dinov2.lvd142m",
+    "revision": "4741e1cafbf45415e77074bb0cb42dba76c8684a",
+    "expected_dim": 1024,
+    "pooling": "vector",
+    "batch_size_a4000": 16,
+    "license": "Apache-2.0",
+    "redistribute_embeddings": true
+  },
+  "resnet50": {
+    "provider": "timm",
+    "repo_id": "timm/resnet50.a1_in1k",
+    "revision": "767268603ca0cb0bfe326fa87277f19c419566ef",
+    "expected_dim": 2048,
+    "pooling": "vector",
+    "batch_size_a4000": 128,
+    "license": "Apache-2.0",
+    "redistribute_embeddings": true
+  }
+}

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import html
 import json
+from pathlib import Path
 import re
 import sys
 import time
@@ -31,6 +32,7 @@ from dataclasses import dataclass, field
 
 MAILTO = "muthu@example.org"
 API = "https://api.crossref.org/works/"
+OUTPUT = Path(__file__).resolve().parent / "crossref_verified.bib"
 
 
 @dataclass
@@ -185,9 +187,9 @@ def main() -> int:
 
     if emit:
         out = "\n\n".join(to_bibtex(r.key, r.data, r.doi) for r in records if r.ok)
-        with open("crossref_verified.bib", "w", encoding="utf-8") as fh:
+        with OUTPUT.open("w", encoding="utf-8") as fh:
             fh.write(out + "\n")
-        print("\nWrote crossref_verified.bib")
+        print(f"\nWrote {OUTPUT}")
     return 0
 
 

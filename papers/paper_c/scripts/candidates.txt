@@ -17,6 +17,8 @@ Voon2022                10.1038/s41598-022-21848-3
 Pradeepa2025            10.1038/s41598-025-00930-6
 Ahmed2025IDC            10.2196/62996
 Swin2026DAMF            10.1038/s41598-026-37969-y
+BenRabah2026FMIDC       10.3390/make8060164
+CrossSite2025IDC        10.3390/app152312819
 
 # --- Evaluation integrity: leakage, patient-level splits, reporting ---
 Priyanka2026            10.3389/fdgth.2026.1752938
@@ -28,6 +30,9 @@ Varoquaux2022           10.1038/s41746-022-00592-y
 Kim2019Design           10.3348/kjr.2019.0025
 Collins2024TRIPODAI     10.1136/bmj-2023-078378
 Tejani2024CLAIM         10.1148/ryai.240300
+
+# --- External breast-tumour replication cohort ---
+Amgad2019BCSS           10.1093/bioinformatics/btz083
 
 # --- Site signatures, domain shift, stain variation ---
 Howard2021              10.1038/s41467-021-24698-1

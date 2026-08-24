@@ -23,8 +23,9 @@ OUTPUT = HERE.parent / "dlReferences.bib"
 HEADER = """% dlReferences.bib -- Paper C (deep-learning IDC histopathology)
 %
 % Scope: breast cancer detection from the Kaggle IDC breast histopathology
-% dataset (277,524 patches, 279 patient identifiers) with modern deep-learning
-% and pathology foundation-model backbones under patient-disjoint evaluation.
+% dataset (277,524 patches, 279 public case identifiers) and the BCSS external
+% cohort, with modern pathology foundation models under case-ID-grouped and
+% institution-held-out evaluation.
 %
 % Admission policy: peer-reviewed journal articles only. No preprints, no
 %   conference or workshop proceedings, no LNCS chapters, no dataset cards.

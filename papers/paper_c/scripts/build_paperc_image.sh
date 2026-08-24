@@ -8,23 +8,31 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 LOCK="docker/requirements-paperc.lock"
-# Set after the first resolve_paperc_lock.sh run. Empty means "not yet
-# qualified" and the build will record, rather than enforce, the hash.
-EXPECTED_LOCK_SHA="${MBC_PAPERC_LOCK_SHA:-}"
+# This value is replaced once on the qualified server after resolving against
+# the pinned NGC base. Confirmatory images must never accept an environment
+# override or an unqualified lock.
+EXPECTED_LOCK_SHA="REPLACE_AFTER_SERVER_RESOLUTION"
 
 if [[ ! -f "$LOCK" ]]; then
   echo "Missing $LOCK - run papers/paper_c/scripts/resolve_paperc_lock.sh first." >&2
   exit 1
 fi
 LOCK_SHA="$(sha256sum "$LOCK" | awk '{print $1}')"
-if [[ -n "$EXPECTED_LOCK_SHA" && "$LOCK_SHA" != "$EXPECTED_LOCK_SHA" ]]; then
+if [[ "$EXPECTED_LOCK_SHA" == "REPLACE_AFTER_SERVER_RESOLUTION" ]]; then
+  echo "Builder is intentionally locked: resolve requirements on the qualified server" >&2
+  echo "and replace EXPECTED_LOCK_SHA before building." >&2
+  exit 1
+fi
+if [[ "$LOCK_SHA" != "$EXPECTED_LOCK_SHA" ]]; then
   echo "Dependency lock hash mismatch: $LOCK_SHA" >&2
   echo "Expected qualified lock: $EXPECTED_LOCK_SHA" >&2
   exit 1
 fi
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Refusing to build an experiment image from a dirty tracked tree." >&2
+if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  echo "Refusing to build an experiment image from a dirty or untracked tree." >&2
+  echo "All required pipeline artifacts must be committed because git archive" >&2
+  echo "includes only HEAD." >&2
   exit 1
 fi
 
@@ -60,6 +68,7 @@ docker run --rm -i --gpus all "$CODE_TAG" python - <<'PY'
 import json
 import timm
 import torch
+import transformers
 
 print(json.dumps({
     "torch": torch.__version__,
@@ -67,6 +76,7 @@ print(json.dumps({
     "cuda_available": torch.cuda.is_available(),
     "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
     "timm": timm.__version__,
+    "transformers": transformers.__version__,
 }, indent=2))
 if not torch.cuda.is_available():
     raise SystemExit("CUDA qualification failed.")
