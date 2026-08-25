@@ -1,5 +1,5 @@
 {
-  "archive_path": "/Users/muthu/Downloads/Histopathology-dataset",
+  "archive_path": "Histopathology-dataset",
   "mode": "cv",
   "seed": 42,
   "ratio_bins": 4,

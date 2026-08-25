@@ -1,0 +1,108 @@
+{
+  "archive_path": "Histopathology-dataset",
+  "mode": "cv",
+  "seed": 42,
+  "ratio_bins": 4,
+  "total_patients": 279,
+  "total_patches": 277524,
+  "n_folds": 5,
+  "folds": [
+    {
+      "fold": 0,
+      "train": {
+        "patients": 223,
+        "patches": 223630,
+        "n0": 160375,
+        "n1": 63255,
+        "idc_ratio": 0.2828556097124715,
+        "mean_patient_idc_ratio": 0.3054207510522389
+      },
+      "test": {
+        "patients": 56,
+        "patches": 53894,
+        "n0": 38363,
+        "n1": 15531,
+        "idc_ratio": 0.28817679147957104,
+        "mean_patient_idc_ratio": 0.31860143570785876
+      }
+    },
+    {
+      "fold": 1,
+      "train": {
+        "patients": 223,
+        "patches": 224883,
+        "n0": 160465,
+        "n1": 64418,
+        "idc_ratio": 0.286451176834176,
+        "mean_patient_idc_ratio": 0.30615925599890714
+      },
+      "test": {
+        "patients": 56,
+        "patches": 52641,
+        "n0": 38273,
+        "n1": 14368,
+        "idc_ratio": 0.27294314317737123,
+        "mean_patient_idc_ratio": 0.31566060350951897
+      }
+    },
+    {
+      "fold": 2,
+      "train": {
+        "patients": 223,
+        "patches": 219684,
+        "n0": 157952,
+        "n1": 61732,
+        "idc_ratio": 0.2810036233863185,
+        "mean_patient_idc_ratio": 0.3107491146543333
+      },
+      "test": {
+        "patients": 56,
+        "patches": 57840,
+        "n0": 40786,
+        "n1": 17054,
+        "idc_ratio": 0.2948478561549101,
+        "mean_patient_idc_ratio": 0.29738313064951843
+      }
+    },
+    {
+      "fold": 3,
+      "train": {
+        "patients": 224,
+        "patches": 225550,
+        "n0": 162964,
+        "n1": 62586,
+        "idc_ratio": 0.2774817113722013,
+        "mean_patient_idc_ratio": 0.301624168934011
+      },
+      "test": {
+        "patients": 55,
+        "patches": 51974,
+        "n0": 35774,
+        "n1": 16200,
+        "idc_ratio": 0.31169430869280795,
+        "mean_patient_idc_ratio": 0.33430352805583446
+      }
+    },
+    {
+      "fold": 4,
+      "train": {
+        "patients": 223,
+        "patches": 216349,
+        "n0": 153196,
+        "n1": 63153,
+        "idc_ratio": 0.2919033598491326,
+        "mean_patient_idc_ratio": 0.3164072805184622
+      },
+      "test": {
+        "patients": 56,
+        "patches": 61175,
+        "n0": 45542,
+        "n1": 15633,
+        "idc_ratio": 0.25554556599918266,
+        "mean_patient_idc_ratio": 0.2748515058691479
+      }
+    }
+  ],
+  "test_idc_ratio_mean": 0.2846415331007686,
+  "test_idc_ratio_std": 0.019141302869449876
+}
