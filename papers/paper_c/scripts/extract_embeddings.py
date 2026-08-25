@@ -1,372 +1,592 @@
 #!/usr/bin/env python3
-"""Cache frozen foundation-model embeddings for the IDC patch archive.
+"""Extract revision-pinned frozen embeddings for Paper C.
 
-This is a pure forward pass. It consumes no labels for any decision, performs no
-model selection, and is independent of the fold structure -- the embedding of a
-patch is a function of the image alone. It is therefore safe to run before the
-Phase 1 preregistration is filed.
-
-Two transform families are supported, and they must be cached separately because
-the difference between them *is* the C2 experiment:
-
-``upsample224``
-    The 50x50 patch resized directly to the encoder's input resolution. This is
-    what the published IDC literature does, and it feeds a context-starved image
-    to an encoder pretrained on 224x224 fields of view.
-
-``mosaicK``
-    A KxK neighbourhood assembled from spatially adjacent patches using the
-    ``x``/``y`` coordinates in the filename, then resized. This restores genuine
-    field of view at native magnification. The label is always that of the
-    **centre** patch; neighbours contribute context only.
-
-    Edge tiles and gaps are filled with white (slide background). Individual
-    tiles are resized to 50x50 before assembly because the public archive
-    contains truncated patches at mount boundaries.
-
-.. warning::
-   Mosaic transforms must not be paired with the *random patch split* arm of the
-   C1 leakage experiment. A neighbour of a test patch can land in the training
-   set, which adds a second leakage channel and confounds the measurement. Keep
-   C1 on ``upsample224``. (That mosaics make random patch splitting even leakier
-   is itself a reportable observation.)
-
-Usage
------
-Smoke test on a subset, then the full pass::
-
-    python extract_embeddings.py --encoder uni --transform upsample224 \\
-        --archive-path /datasets/histopath --output-dir /outputs/emb --limit 5000
-
-    python extract_embeddings.py --encoder uni --transform upsample224 \\
-        --archive-path /datasets/histopath --output-dir /outputs/emb
+The cache is fold-independent and label-blind with respect to model selection.
+Every consumer must join ``index.csv`` to split manifests on ``filepath``;
+embedding row order is not the fold-manifest order.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
 import json
 import os
 import re
 import sys
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
-import pandas as pd
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 EXCLUDED_DIR = "IDC_regular_ps50_idx5"
-FNAME = re.compile(r"^(?P<stem>.+?)_idx(?P<idx>\d+)_x(?P<x>\d+)_y(?P<y>\d+)_class(?P<cls>\d+)\.png$")
-TILE = 50  # nominal patch edge in pixels; the archive's generation parameter
+FNAME = re.compile(
+    r"^(?P<stem>.+?)_idx(?P<idx>\d+)_x(?P<x>\d+)_y(?P<y>\d+)_class(?P<cls>\d+)\.png$"
+)
+TILE = 50
+ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_REGISTRY = ROOT / "papers/paper_c/config/model_registry.json"
 
 
-# --------------------------------------------------------------------------
-# Encoder registry
-# --------------------------------------------------------------------------
-
-@dataclass
-class Encoder:
-    repo: str
-    dim: int
-    create_kwargs: dict = field(default_factory=dict)
-    pool: str = "cls"  # "cls" or "cls_plus_mean" (Virchow's documented recipe)
-    note: str = ""
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def encoder_registry() -> dict[str, Encoder]:
-    """Built lazily so ``timm`` is only imported when a model is actually needed."""
-    import timm
-    import torch.nn as nn
+def json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
-    return {
-        "uni": Encoder(
-            repo="hf-hub:MahmoodLab/uni",
-            dim=1024,
-            create_kwargs={"init_values": 1e-5, "dynamic_img_size": True},
-            pool="cls",
-            note="ViT-L/16 @224, CC-BY-NC-ND, gated",
-        ),
-        "virchow": Encoder(
-            repo="hf-hub:paige-ai/Virchow",
-            dim=2560,
-            create_kwargs={
-                "mlp_layer": timm.layers.SwiGLUPacked,
-                "act_layer": nn.SiLU,
-            },
-            pool="cls_plus_mean",
-            note="ViT-H/14 @224, gated; documented embedding is cls||mean(patch tokens)",
-        ),
+
+def registry_entry(path: Path, name: str) -> tuple[dict[str, Any], str]:
+    raw = path.read_bytes()
+    registry = json.loads(raw)
+    if name not in registry:
+        raise SystemExit(f"Unknown encoder {name!r}; choose from {sorted(registry)}")
+    return registry[name], hashlib.sha256(raw).hexdigest()
+
+
+def model_file_hashes(snapshot: Path) -> dict[str, str]:
+    loading_suffixes = {".json", ".safetensors", ".bin", ".py"}
+    hashes = {
+        str(path.relative_to(snapshot)): sha256(path)
+        for path in sorted(snapshot.rglob("*"))
+        if path.is_file() and path.suffix in loading_suffixes
     }
+    if "config.json" not in hashes or not any(
+        name.endswith((".safetensors", ".bin")) for name in hashes
+    ):
+        raise RuntimeError(f"Incomplete model snapshot at {snapshot}")
+    return hashes
 
 
-def load_encoder(name: str, device: torch.device):
-    import timm
-
-    reg = encoder_registry()
-    if name not in reg:
-        raise SystemExit(
-            f"Unknown encoder {name!r}. Available: {sorted(reg)}.\n"
-            "UNI2-h and CONCH are deliberately not wired up yet; see the paper plan."
+def pool_virchow2_tokens(tokens: torch.Tensor) -> torch.Tensor:
+    if tokens.ndim != 3 or tuple(tokens.shape[1:]) != (261, 1280):
+        raise RuntimeError(
+            "Virchow2 must return [batch, 261, 1280] tokens; "
+            f"received {tuple(tokens.shape)}"
         )
-    spec = reg[name]
-    model = timm.create_model(spec.repo, pretrained=True, num_classes=0, **spec.create_kwargs)
-    model.eval().to(device)
-
-    cfg = timm.data.resolve_data_config({}, model=model)
-    transform = timm.data.create_transform(**cfg, is_training=False)
-    return model, transform, spec, cfg
+    return torch.cat([tokens[:, 0], tokens[:, 5:].mean(dim=1)], dim=-1)
 
 
-def pool_output(out: torch.Tensor, pool: str) -> torch.Tensor:
-    """Reduce encoder output to one vector per image."""
-    if out.ndim == 2:  # already pooled by num_classes=0
-        return out
-    if pool == "cls_plus_mean":
-        cls = out[:, 0]
-        patches = out[:, 1:].mean(dim=1)
-        return torch.cat([cls, patches], dim=-1)
-    return out[:, 0]
+class EncoderBundle:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        transform: Callable[[Image.Image], torch.Tensor],
+        forward: Callable[[torch.Tensor], torch.Tensor],
+        data_config: dict[str, Any],
+        artifact_hashes: dict[str, str],
+        snapshot: Path,
+    ):
+        self.model = model
+        self.transform = transform
+        self.forward = forward
+        self.data_config = data_config
+        self.artifact_hashes = artifact_hashes
+        self.snapshot = snapshot
 
 
-# --------------------------------------------------------------------------
-# Patch index
-# --------------------------------------------------------------------------
+def load_encoder(
+    spec: dict[str, Any],
+    device: torch.device,
+    cache_dir: Path,
+) -> EncoderBundle:
+    """Download an exact snapshot, then load only from that local directory."""
+    from huggingface_hub import snapshot_download
 
-def build_patch_index(archive: Path) -> pd.DataFrame:
-    rows = []
-    dirs = sorted(
-        d for d in os.listdir(archive)
-        if (archive / d).is_dir() and d != EXCLUDED_DIR
+    snapshot = Path(snapshot_download(
+        repo_id=spec["repo_id"],
+        revision=spec["revision"],
+        cache_dir=cache_dir,
+    ))
+    hashes = model_file_hashes(snapshot)
+    provider = spec["provider"]
+
+    if provider == "timm":
+        import timm
+        from timm.data import create_transform, resolve_data_config
+
+        kwargs: dict[str, Any] = {}
+        if spec["pooling"] == "vector":
+            kwargs["num_classes"] = 0
+        if spec["pooling"] == "cls_plus_mean_skip_5":
+            kwargs["mlp_layer"] = timm.layers.SwiGLUPacked
+            kwargs["act_layer"] = torch.nn.SiLU
+
+        model = timm.create_model(
+            f"local-dir:{snapshot}",
+            pretrained=True,
+            **kwargs,
+        )
+        config = resolve_data_config(model.pretrained_cfg, model=model)
+        transform = create_transform(**config, is_training=False)
+
+        if spec["pooling"] == "cls_plus_mean_skip_5":
+            def forward(batch: torch.Tensor) -> torch.Tensor:
+                return pool_virchow2_tokens(model(batch))
+        else:
+            def forward(batch: torch.Tensor) -> torch.Tensor:
+                output = model(batch)
+                if output.ndim != 2:
+                    raise RuntimeError(
+                        f"Expected a pooled feature matrix, got {tuple(output.shape)}"
+                    )
+                return output
+
+        return EncoderBundle(
+            model, transform, forward, dict(config), hashes, snapshot
+        )
+
+    if provider == "transformers":
+        from transformers import AutoImageProcessor, AutoModel
+
+        processor = AutoImageProcessor.from_pretrained(
+            snapshot, local_files_only=True
+        )
+        model = AutoModel.from_pretrained(
+            snapshot, local_files_only=True, trust_remote_code=False
+        )
+
+        def transform(image: Image.Image) -> torch.Tensor:
+            return processor(images=image, return_tensors="pt")["pixel_values"][0]
+
+        def forward(batch: torch.Tensor) -> torch.Tensor:
+            output = model(pixel_values=batch).last_hidden_state
+            if output.ndim != 3:
+                raise RuntimeError(
+                    f"Expected transformer tokens, got {tuple(output.shape)}"
+                )
+            return output[:, 0]
+
+        config = {
+            "input_size": [3, processor.size.get("height", 224), processor.size.get("width", 224)],
+            "image_mean": list(processor.image_mean),
+            "image_std": list(processor.image_std),
+        }
+        return EncoderBundle(model, transform, forward, config, hashes, snapshot)
+
+    raise RuntimeError(f"Unsupported model provider: {provider}")
+
+
+def build_patch_index(archive: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    case_ids = sorted(
+        name
+        for name in os.listdir(archive)
+        if (archive / name).is_dir() and name != EXCLUDED_DIR
     )
-    for d in dirs:
+    for case_id in case_ids:
         for cls in ("0", "1"):
-            cls_dir = archive / d / cls
+            cls_dir = archive / case_id / cls
             if not cls_dir.is_dir():
                 continue
             for entry in os.scandir(cls_dir):
                 if not entry.is_file() or entry.name.startswith("."):
                     continue
-                m = FNAME.match(entry.name)
-                if not m:
-                    continue
+                match = FNAME.match(entry.name)
+                if not match:
+                    raise RuntimeError(f"Unexpected patch filename: {entry.name}")
                 rows.append({
-                    "patient_id": d,
+                    "filepath": f"{case_id}/{cls}/{entry.name}",
+                    "case_id": case_id,
                     "label": int(cls),
-                    "x": int(m.group("x")),
-                    "y": int(m.group("y")),
-                    "filepath": f"{d}/{cls}/{entry.name}",
+                    "x": int(match.group("x")),
+                    "y": int(match.group("y")),
                 })
-    df = pd.DataFrame(rows)
-    # Deterministic order. Every downstream artifact is aligned to this ordering,
-    # so it must not depend on filesystem iteration order.
-    return df.sort_values(["patient_id", "y", "x", "label"]).reset_index(drop=True)
+    rows.sort(key=lambda row: (row["case_id"], row["y"], row["x"], row["label"]))
+    filepaths = [row["filepath"] for row in rows]
+    if len(filepaths) != len(set(filepaths)):
+        raise RuntimeError("Archive index contains duplicate filepaths.")
+    return rows
 
 
-# --------------------------------------------------------------------------
-# Dataset
-# --------------------------------------------------------------------------
+def add_context_metadata(
+    centres: list[dict[str, Any]],
+    lookup: dict[tuple[str, int, int], str],
+    k: int,
+) -> None:
+    half = k // 2
+    total = k * k
+    for row in centres:
+        available = sum(
+            (row["case_id"], row["x"] + gx * TILE, row["y"] + gy * TILE) in lookup
+            for gy in range(-half, half + 1)
+            for gx in range(-half, half + 1)
+        )
+        row["context_k"] = k
+        row["context_available"] = available
+        row["context_total"] = total
+        row["context_complete"] = int(available == total)
+        row["padding_fraction"] = (total - available) / total
+
 
 class PatchDataset(Dataset):
     def __init__(
         self,
-        index: pd.DataFrame,
+        centres: list[dict[str, Any]],
         archive: Path,
-        transform,
-        mosaic_k: int = 1,
-        neighbour_lookup: dict[tuple[str, int, int], str] | None = None,
+        transform: Callable[[Image.Image], torch.Tensor],
+        k: int,
+        lookup: dict[tuple[str, int, int], str],
     ):
-        self.index = index.reset_index(drop=True)
+        self.centres = centres
         self.archive = archive
         self.transform = transform
-        self.k = mosaic_k
-        self.lookup = neighbour_lookup or {}
+        self.k = k
+        self.lookup = lookup
 
     def __len__(self) -> int:
-        return len(self.index)
+        return len(self.centres)
 
-    def _tile(self, patient: str, x: int, y: int) -> Image.Image | None:
-        rel = self.lookup.get((patient, x, y))
-        if rel is None:
+    def _tile(self, case_id: str, x: int, y: int) -> Image.Image | None:
+        relpath = self.lookup.get((case_id, x, y))
+        if relpath is None:
             return None
-        try:
-            with Image.open(self.archive / rel) as im:
-                return im.convert("RGB").resize((TILE, TILE), Image.BILINEAR)
-        except (OSError, ValueError):
-            return None
+        with Image.open(self.archive / relpath) as image:
+            return image.convert("RGB").resize((TILE, TILE), Image.Resampling.BILINEAR)
 
-    def __getitem__(self, i: int):
-        row = self.index.iloc[i]
-        patient, x, y = row["patient_id"], int(row["x"]), int(row["y"])
-
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
+        row = self.centres[index]
         if self.k == 1:
-            with Image.open(self.archive / row["filepath"]) as im:
-                img = im.convert("RGB")
-        else:
-            half = self.k // 2
-            canvas = Image.new("RGB", (TILE * self.k, TILE * self.k), (255, 255, 255))
-            for gy in range(-half, half + 1):
-                for gx in range(-half, half + 1):
-                    tile = self._tile(patient, x + gx * TILE, y + gy * TILE)
-                    if tile is not None:
-                        canvas.paste(tile, ((gx + half) * TILE, (gy + half) * TILE))
-            img = canvas
+            with Image.open(self.archive / row["filepath"]) as image:
+                transformed = self.transform(image.convert("RGB"))
+            return transformed, index
 
-        return self.transform(img), i
+        half = self.k // 2
+        canvas = Image.new("RGB", (TILE * self.k, TILE * self.k), (255, 255, 255))
+        for gy in range(-half, half + 1):
+            for gx in range(-half, half + 1):
+                tile = self._tile(
+                    row["case_id"],
+                    row["x"] + gx * TILE,
+                    row["y"] + gy * TILE,
+                )
+                if tile is not None:
+                    canvas.paste(tile, ((gx + half) * TILE, (gy + half) * TILE))
+        return self.transform(canvas), index
 
 
-# --------------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------------
+def write_index(path: Path, rows: list[dict[str, Any]]) -> str:
+    fields = [
+        "filepath", "case_id", "label", "x", "y", "context_k",
+        "context_available", "context_total", "context_complete",
+        "padding_fraction",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    return sha256(path)
+
+
+def assert_existing_index(path: Path, centres: list[dict[str, Any]]) -> str:
+    with path.open(newline="", encoding="utf-8") as stream:
+        existing = list(csv.DictReader(stream))
+    expected = [row["filepath"] for row in centres]
+    observed = [row["filepath"] for row in existing]
+    if observed != expected:
+        raise RuntimeError(
+            "Existing cache index differs from the requested centre population."
+        )
+    return sha256(path)
+
+
+def parse_transform(name: str) -> int:
+    if name == "upsample224":
+        return 1
+    match = re.fullmatch(r"mosaic(3|5|9)", name)
+    if not match:
+        raise SystemExit("Transform must be upsample224, mosaic3, mosaic5 or mosaic9.")
+    return int(match.group(1))
+
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--encoder", required=True)
-    ap.add_argument("--transform", required=True, help="upsample224 or mosaic3 / mosaic5 ...")
-    ap.add_argument("--archive-path", required=True, type=Path)
-    ap.add_argument("--output-dir", required=True, type=Path)
-    ap.add_argument("--batch-size", type=int, default=128)
-    ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--shard-size", type=int, default=20000)
-    ap.add_argument("--limit", type=int, default=0, help="smoke-test on the first N patches")
-    ap.add_argument("--fp32", action="store_true", help="disable autocast (debugging only)")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--encoder", required=True)
+    parser.add_argument("--transform", required=True)
+    parser.add_argument("--archive-path", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    parser.add_argument("--hf-cache", type=Path, default=Path("/cache/huggingface"))
+    parser.add_argument("--batch-size", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--shard-size", type=int, default=20_000)
+    parser.add_argument(
+        "--centre-limit",
+        type=int,
+        default=0,
+        help="Engineering smoke subset; neighbour lookup still uses the full archive.",
+    )
+    parser.add_argument(
+        "--run-name",
+        default="",
+        help="Required for smoke subsets so production cache paths are untouched.",
+    )
+    parser.add_argument("--fp32", action="store_true")
+    args = parser.parse_args()
 
-    if args.transform == "upsample224":
-        mosaic_k = 1
-    else:
-        m = re.fullmatch(r"mosaic(\d+)", args.transform)
-        if not m:
-            raise SystemExit(f"Unrecognised transform {args.transform!r}")
-        mosaic_k = int(m.group(1))
-        if mosaic_k % 2 == 0:
-            raise SystemExit("Mosaic K must be odd so the labelled patch is the centre tile.")
+    k = parse_transform(args.transform)
+    if args.centre_limit and not args.run_name:
+        raise SystemExit("--centre-limit requires --run-name (for example smoke-5000).")
+    if not args.centre_limit and not os.environ.get("MBC_DATASET_SHA"):
+        raise SystemExit("Full extraction requires MBC_DATASET_SHA provenance.")
 
     archive = args.archive_path.expanduser().resolve()
     if not archive.is_dir():
         raise SystemExit(f"Archive not found: {archive}")
+    spec, registry_sha = registry_entry(args.registry, args.encoder)
+    cache_name = f"{args.encoder}_{args.transform}"
+    if args.run_name:
+        cache_name += f"__{args.run_name}"
+    output = args.output_dir.expanduser().resolve() / cache_name
+    output.mkdir(parents=True, exist_ok=True)
+    emb_path = output / "embeddings.npy"
+    index_path = output / "index.csv"
+    provenance_path = output / "provenance.json"
+    state_path = output / "shards_done.json"
 
-    out = args.output_dir.expanduser().resolve() / f"{args.encoder}_{args.transform}"
-    out.mkdir(parents=True, exist_ok=True)
-    emb_path = out / "embeddings.npy"
-    idx_path = out / "index.csv"
-    prov_path = out / "provenance.json"
-    state_path = out / "shards_done.json"
-
-    if prov_path.exists() and json.loads(prov_path.read_text()).get("complete"):
-        raise SystemExit(f"A completed cache already exists at {out}. Refusing to overwrite.")
-
-    if not torch.cuda.is_available():
-        print("WARNING: CUDA unavailable; this will be extremely slow.", file=sys.stderr)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if provenance_path.exists():
+        old = json.loads(provenance_path.read_text())
+        if old.get("complete"):
+            raise SystemExit(f"Completed cache exists at {output}; refusing overwrite.")
 
     print("Indexing archive...", flush=True)
-    index = build_patch_index(archive)
-    if args.limit:
-        index = index.iloc[: args.limit].reset_index(drop=True)
-    n = len(index)
-    print(f"  {n:,} patches, {index['patient_id'].nunique()} patients", flush=True)
+    full_index = build_patch_index(archive)
+    if len(full_index) != 277_524:
+        raise RuntimeError(f"Expected 277,524 patches, found {len(full_index):,}")
+    lookup = {
+        (row["case_id"], row["x"], row["y"]): row["filepath"]
+        for row in full_index
+    }
+    if len(lookup) != len(full_index):
+        raise RuntimeError("Duplicate case/x/y coordinates found in archive.")
 
-    lookup = None
-    if mosaic_k > 1:
-        lookup = {
-            (r.patient_id, r.x, r.y): r.filepath
-            for r in index.itertuples(index=False)
-        }
-
-    print(f"Loading encoder {args.encoder}...", flush=True)
-    model, transform, spec, cfg = load_encoder(args.encoder, device)
-
-    # Probe the true output width rather than trusting the registry constant.
-    with torch.no_grad():
-        probe = torch.zeros(1, *cfg["input_size"], device=device)
-        dim = int(pool_output(model(probe), spec.pool).shape[-1])
-    if dim != spec.dim:
-        print(f"  note: probed dim {dim} differs from registry value {spec.dim}", flush=True)
-    print(f"  embedding dim {dim}, input {cfg['input_size']}", flush=True)
-
-    if not idx_path.exists():
-        index.to_csv(idx_path, index=False)
-
-    mm = np.lib.format.open_memmap(
-        emb_path, mode="r+" if emb_path.exists() else "w+",
-        dtype=np.float16, shape=(n, dim),
+    centres = full_index[: args.centre_limit] if args.centre_limit else full_index
+    centres = [dict(row) for row in centres]
+    add_context_metadata(centres, lookup, k)
+    complete = sum(row["context_complete"] for row in centres)
+    print(
+        f"  {len(centres):,} centres; {complete:,} have complete K={k} context",
+        flush=True,
     )
-    done: set[int] = set(json.loads(state_path.read_text())) if state_path.exists() else set()
 
-    shards = [(s, min(s + args.shard_size, n)) for s in range(0, n, args.shard_size)]
-    pending = [(a, b) for k, (a, b) in enumerate(shards) if k not in done]
-    print(f"{len(pending)}/{len(shards)} shards pending", flush=True)
+    if index_path.exists():
+        index_sha = assert_existing_index(index_path, centres)
+    else:
+        index_sha = write_index(index_path, centres)
+    storage_dtype = np.float32 if args.fp32 else np.float16
+    storage_dtype_name = np.dtype(storage_dtype).name
+    request = {
+        "encoder": args.encoder,
+        "repo_id": spec["repo_id"],
+        "revision": spec["revision"],
+        "transform": args.transform,
+        "context_k": k,
+        "n_centres": len(centres),
+        "compute_precision": "fp32" if args.fp32 else "autocast-fp16",
+        "storage_dtype": storage_dtype_name,
+        "shard_size": args.shard_size,
+        "model_registry_sha256": registry_sha,
+        "index_sha256": index_sha,
+        "dataset_sha256": os.environ.get("MBC_DATASET_SHA"),
+        "git_commit": os.environ.get("MBC_GIT_COMMIT"),
+        "image_id": os.environ.get("MBC_IMAGE_ID"),
+        "environment_lock_sha256": os.environ.get("MBC_ENV_LOCK_SHA"),
+    }
 
-    t0 = time.time()
-    seen = 0
-    for k, (a, b) in enumerate(shards):
-        if k in done:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type != "cuda":
+        print("WARNING: CUDA unavailable; extraction is not qualified.", file=sys.stderr)
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
+
+    print(
+        f"Loading {spec['repo_id']} at revision {spec['revision']}...",
+        flush=True,
+    )
+    bundle = load_encoder(spec, device, args.hf_cache)
+    bundle.model.eval().to(device)
+    batch_size = args.batch_size or int(spec["batch_size_a4000"])
+
+    input_size = bundle.data_config.get("input_size", [3, 224, 224])
+    with torch.inference_mode():
+        probe = torch.zeros(1, *input_size, device=device)
+        features = bundle.forward(probe)
+    if features.ndim != 2 or features.shape[0] != 1:
+        raise RuntimeError(f"Invalid encoder output shape: {tuple(features.shape)}")
+    dim = int(features.shape[1])
+    if dim != int(spec["expected_dim"]):
+        raise RuntimeError(
+            f"{args.encoder} returned {dim} dimensions; "
+            f"registry requires {spec['expected_dim']}."
+        )
+    request["embedding_dim"] = dim
+    request["model_artifact_sha256"] = bundle.artifact_hashes
+    if provenance_path.exists():
+        old = json.loads(provenance_path.read_text())
+        mismatches = {
+            key: (old.get(key), value)
+            for key, value in request.items()
+            if old.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"Incomplete cache provenance does not match request: {mismatches}"
+            )
+    else:
+        provenance_path.write_text(
+            json.dumps({"complete": False, **request}, indent=2) + "\n"
+        )
+    print(f"  output dim={dim}; batch={batch_size}; input={input_size}", flush=True)
+
+    n = len(centres)
+    if emb_path.exists():
+        existing = np.load(emb_path, mmap_mode="r")
+        if existing.shape != (n, dim) or existing.dtype != storage_dtype:
+            raise RuntimeError(
+                f"Existing memmap has shape/dtype {existing.shape}/{existing.dtype}; "
+                f"expected {(n, dim)}/{storage_dtype_name}."
+            )
+        del existing
+    memmap = np.lib.format.open_memmap(
+        emb_path,
+        mode="r+" if emb_path.exists() else "w+",
+        dtype=storage_dtype,
+        shape=(n, dim),
+    )
+    request_sha = hashlib.sha256(
+        json.dumps(request, sort_keys=True).encode()
+    ).hexdigest()
+    state = (
+        json.loads(state_path.read_text())
+        if state_path.exists()
+        else {"request_sha256": request_sha, "completed": {}}
+    )
+    if state.get("request_sha256") != request_sha:
+        raise RuntimeError("Shard-state request hash differs from this extraction.")
+    completed_hashes = {
+        int(shard): digest for shard, digest in state.get("completed", {}).items()
+    }
+    for shard_id, digest in completed_hashes.items():
+        start = shard_id * args.shard_size
+        stop = min(start + args.shard_size, n)
+        observed = hashlib.sha256(
+            np.asarray(memmap[start:stop]).tobytes()
+        ).hexdigest()
+        if observed != digest:
+            raise RuntimeError(f"Completed shard {shard_id} failed integrity check.")
+    completed_shards = set(completed_hashes)
+    shards = [
+        (start, min(start + args.shard_size, n))
+        for start in range(0, n, args.shard_size)
+    ]
+    dataset = PatchDataset(centres, archive, bundle.transform, k, lookup)
+    start_time = time.time()
+    processed = 0
+
+    for shard_id, (start, stop) in enumerate(shards):
+        if shard_id in completed_shards:
             continue
         loader = DataLoader(
-            PatchDataset(index.iloc[a:b], archive, transform, mosaic_k, lookup),
-            batch_size=args.batch_size,
+            torch.utils.data.Subset(dataset, range(start, stop)),
+            batch_size=batch_size,
             num_workers=args.workers,
-            pin_memory=True,
+            pin_memory=device.type == "cuda",
             shuffle=False,
         )
-        with torch.no_grad():
-            for batch, local in loader:
-                batch = batch.to(device, non_blocking=True)
-                with torch.autocast("cuda", dtype=torch.float16, enabled=not args.fp32 and device.type == "cuda"):
-                    feats = pool_output(model(batch), spec.pool)
-                mm[a + local.numpy()] = feats.float().cpu().numpy().astype(np.float16)
-                seen += len(local)
-
-        done.add(k)
-        state_path.write_text(json.dumps(sorted(done)))
-        mm.flush()
-        rate = seen / max(time.time() - t0, 1e-6)
-        eta_min = (n - b) / max(rate, 1e-6) / 60
+        cursor = start
+        with torch.inference_mode():
+            for images, _ in loader:
+                images = images.to(device, non_blocking=True)
+                with torch.autocast(
+                    device_type="cuda",
+                    dtype=torch.float16,
+                    enabled=device.type == "cuda" and not args.fp32,
+                ):
+                    batch_features = bundle.forward(images)
+                if batch_features.shape[1] != dim:
+                    raise RuntimeError("Embedding dimension changed during extraction.")
+                count = batch_features.shape[0]
+                memmap[cursor:cursor + count] = (
+                    batch_features.float().cpu().numpy().astype(storage_dtype)
+                )
+                cursor += count
+                processed += count
+        if cursor != stop:
+            raise RuntimeError(f"Shard {shard_id} wrote {cursor-start}, expected {stop-start}")
+        memmap.flush()
+        completed_shards.add(shard_id)
+        completed_hashes[shard_id] = hashlib.sha256(
+            np.asarray(memmap[start:stop]).tobytes()
+        ).hexdigest()
+        state_path.write_text(json.dumps({
+            "request_sha256": request_sha,
+            "completed": {
+                str(shard): completed_hashes[shard]
+                for shard in sorted(completed_hashes)
+            },
+        }, indent=2) + "\n")
+        rate = processed / max(time.time() - start_time, 1e-6)
         print(
-            f"  shard {k + 1}/{len(shards)} done  [{b:,}/{n:,}]  "
-            f"{rate:.0f} img/s  eta {eta_min:.1f} min",
+            f"  shard {shard_id + 1}/{len(shards)} complete "
+            f"[{stop:,}/{n:,}] {rate:.1f} images/s",
             flush=True,
         )
 
-    mm.flush()
-    del mm
+    memmap.flush()
+    del memmap
+    if completed_shards != set(range(len(shards))):
+        raise RuntimeError("Not every shard completed.")
 
-    prov = {
+    provenance = {
         "complete": True,
         "encoder": args.encoder,
-        "encoder_repo": spec.repo,
-        "encoder_note": spec.note,
-        "pool": spec.pool,
+        "repo_id": spec["repo_id"],
+        "revision": spec["revision"],
+        "license": spec["license"],
+        "redistribute_embeddings": spec["redistribute_embeddings"],
+        "model_artifact_sha256": bundle.artifact_hashes,
+        "model_snapshot": str(bundle.snapshot),
+        "model_registry_sha256": registry_sha,
         "transform": args.transform,
-        "mosaic_k": mosaic_k,
-        "tile_px": TILE,
+        "context_k": k,
+        "n_centres": n,
+        "n_complete_context": complete,
         "embedding_dim": dim,
-        "n_patches": n,
-        "n_patients": int(index["patient_id"].nunique()),
-        "input_size": list(cfg["input_size"]),
-        "data_config": {k: (list(v) if isinstance(v, (tuple, list)) else v) for k, v in cfg.items()},
-        "dtype": "float16",
-        "archive_path": str(archive),
-        "torch": torch.__version__,
-        "cuda": torch.version.cuda,
-        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "dtype": storage_dtype_name,
+        "compute_precision": "fp32" if args.fp32 else "autocast-fp16",
+        "batch_size": batch_size,
+        "data_config": json_safe(bundle.data_config),
+        "index_sha256": index_sha,
+        "embeddings_sha256": sha256(emb_path),
+        "dataset_sha256": os.environ.get("MBC_DATASET_SHA"),
         "git_commit": os.environ.get("MBC_GIT_COMMIT"),
         "image_id": os.environ.get("MBC_IMAGE_ID"),
-        "env_lock_sha": os.environ.get("MBC_ENV_LOCK_SHA"),
-        "dataset_sha": os.environ.get("MBC_DATASET_SHA"),
-        "wall_clock_s": round(time.time() - t0, 1),
-        "limit_applied": args.limit or None,
+        "environment_lock_sha256": os.environ.get("MBC_ENV_LOCK_SHA"),
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "wall_clock_seconds": round(time.time() - start_time, 3),
+        "engineering_subset": args.centre_limit or None,
+        "run_name": args.run_name or None,
     }
-    prov_path.write_text(json.dumps(prov, indent=2))
-
-    print(f"\nWrote {emb_path}  ({n:,} x {dim}, float16)")
-    print(f"Wrote {idx_path}")
-    print(f"Wrote {prov_path}")
-    print(f"Elapsed {(time.time() - t0) / 60:.1f} min")
+    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n")
+    print(f"Wrote {output} ({n:,} × {dim})", flush=True)
     return 0
 
 

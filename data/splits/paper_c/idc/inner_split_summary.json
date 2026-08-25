@@ -1,0 +1,100 @@
+{
+  "terminology": "public case identifiers; patient identity is not verified",
+  "source_outer_splits": "data/splits/histopath_kaggle",
+  "source_patient_stats_sha256": "9468a6ca04e680d956041bbe6113ce9a9e1ac213ff1d6a0b812f55850b677d08",
+  "seed_base": 1042,
+  "val_ratio": 0.125,
+  "cal_ratio": 0.125,
+  "folds": [
+    {
+      "fold": 0,
+      "seed": 1042,
+      "counts": {
+        "inner_train": 167,
+        "inner_val": 28,
+        "inner_cal": 28,
+        "outer_test": 56
+      },
+      "sha256": {
+        "inner_train": "6ae513edbb05052a2ee22a0467d503aff79da1b521e9182fd2a0a6dfef16400d",
+        "inner_val": "2fec3e5699d99f59a54581365adb2e04110b02e26b25b9caae6c8bfbf54b002e",
+        "inner_cal": "1209ba3bdfd160fe886611b6907406f52c06b61d25df96de09186ec861ddc66a",
+        "outer_test": "884e75d956a2ab3634e9265c1fb8e1bdf6859fe41a7ca78d1eecb84fa7caec34"
+      },
+      "source_outer_train_sha256": "222bf013a7ebe8ccbc23ef2fb0ee599edb37ef776dbab8c40ca5b05799e73524",
+      "source_outer_test_sha256": "81df78b148ca0a5b6695101d418ff356cecb2464fc295c81af8650e4b5c62f7e"
+    },
+    {
+      "fold": 1,
+      "seed": 1043,
+      "counts": {
+        "inner_train": 167,
+        "inner_val": 28,
+        "inner_cal": 28,
+        "outer_test": 56
+      },
+      "sha256": {
+        "inner_train": "742a8ceca2191bdcdd8ca7daa32c6dc1bbed3b5924619218dec4f1019d45ed8e",
+        "inner_val": "eb8176f4ef859dcbb45dbe5ea36ab79d806b9bf36ebcb3a11c942acdefbe2672",
+        "inner_cal": "e34b5939521fc1da9651391389fecfcccfbca1cf5e450781f405f43b673c7c84",
+        "outer_test": "1b5e013e328bb434163e84cddf3e1b6fce6c8b255ef3981e8cca9ce169b0d7d8"
+      },
+      "source_outer_train_sha256": "ecba79477fef410734a99b3dac5fce34e855c9a0783b87d6c1bea95860467c8e",
+      "source_outer_test_sha256": "62e0b5ef6a3120c35587bb4552a40b17157d15cbc7e6cd07ed4a0b90fe1a2277"
+    },
+    {
+      "fold": 2,
+      "seed": 1044,
+      "counts": {
+        "inner_train": 167,
+        "inner_val": 28,
+        "inner_cal": 28,
+        "outer_test": 56
+      },
+      "sha256": {
+        "inner_train": "7e45083c4c8fcca56bb94d428a2fb1eac0a7881ec5204facefbed847b7aa6ec7",
+        "inner_val": "1edb6cff7f266cd2db8ccaa4d4a307dda098d258893e06a8e5524c3eba1df976",
+        "inner_cal": "bb667cd094ec2f1fefaa7c88aac33bd59617c2e1407b4c099785b7fdd6189038",
+        "outer_test": "379877458b7a1a86472ceae16f1fa7b50b7199800f06828d601728db1099fdcb"
+      },
+      "source_outer_train_sha256": "783dee152185b1ed3928aba0010da9b9cf74ab2f47b0adb720ba9bf22bcb439a",
+      "source_outer_test_sha256": "75974a84c6d7ea8e287d806c2d84d78d00041e0fe2143b4578afe63468ca972a"
+    },
+    {
+      "fold": 3,
+      "seed": 1045,
+      "counts": {
+        "inner_train": 168,
+        "inner_val": 28,
+        "inner_cal": 28,
+        "outer_test": 55
+      },
+      "sha256": {
+        "inner_train": "abffec5e1995bdc542b0dc137d5cd8a49190b89c3ecb09a0414a37742f37a75e",
+        "inner_val": "65e8c6fc6d3343e044fe8511a4de061b71342d8b51e7bab826d34b49dbc9556d",
+        "inner_cal": "5e608801146cc7d3b8714bbf80eb4c19224ae48aa43268429f22b955e2be517e",
+        "outer_test": "5146007345f38c2d4519bc6ca4bd560af9035855eff915a7c7277add7e8f8619"
+      },
+      "source_outer_train_sha256": "8261a16f12a3cb2fd6ccecba76ac078862642fb152e9376d4781a4ef6e9e7c76",
+      "source_outer_test_sha256": "ead073fdbb26d6e558b2878267e44c8063074b66b1f2a6e47add6cf5ddfd9b85"
+    },
+    {
+      "fold": 4,
+      "seed": 1046,
+      "counts": {
+        "inner_train": 167,
+        "inner_val": 28,
+        "inner_cal": 28,
+        "outer_test": 56
+      },
+      "sha256": {
+        "inner_train": "5e1348303e35db699c2cfcac61a22bd1a6a16c75a0ec972c98a8eb92dfae687f",
+        "inner_val": "04f9305c628dca7ff36e0088426889da1a0c1307909105e03ac560e869211c0b",
+        "inner_cal": "ae2a1987c68b2f4da78b70c416fc41ab59565588ebad671eb427dd539e889048",
+        "outer_test": "82929b3d13daf5b8b335e35b510bdae59747a4fc2ab9d6d4593f9953525fa52c"
+      },
+      "source_outer_train_sha256": "7539220ca08376075eb0208bbdd6466526197252758f168b471bd42434fec648",
+      "source_outer_test_sha256": "c632cbe7ac18db95a87684d9bbf32241876d7bfa21213fe85b50c33965103546"
+    }
+  ]
+}

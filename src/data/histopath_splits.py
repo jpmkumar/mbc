@@ -299,6 +299,77 @@ def split_train_val_patients(
     return train_ids, val_ids
 
 
+def split_train_val_cal_groups(
+    patient_df: pd.DataFrame,
+    group_ids: list[str],
+    *,
+    val_ratio: float = 0.125,
+    cal_ratio: float = 0.125,
+    seed: int = 42,
+) -> tuple[list[str], list[str], list[str]]:
+    """Split case identifiers by ratio bin into train, validation and calibration.
+
+    ``patient_df`` retains its historical name for compatibility, but the public
+    IDC archive only establishes case identifiers, not verified patient IDs.
+    Every ratio bin is shuffled independently and contributes to all three
+    partitions. The function fails rather than silently producing an empty
+    calibration stratum.
+    """
+    import random
+
+    if not 0 < val_ratio < 1 or not 0 < cal_ratio < 1:
+        raise ValueError("val_ratio and cal_ratio must both be in (0, 1).")
+    if val_ratio + cal_ratio >= 1:
+        raise ValueError("val_ratio + cal_ratio must be less than 1.")
+    if "ratio_bin" not in patient_df.columns:
+        raise ValueError("patient_df must contain a precomputed ratio_bin column.")
+
+    ids = {str(group_id) for group_id in group_ids}
+    sub = patient_df.copy()
+    sub["patient_id"] = sub["patient_id"].astype(str)
+    sub = sub[sub["patient_id"].isin(ids)].copy()
+    missing = ids - set(sub["patient_id"])
+    if missing:
+        raise ValueError(f"Unknown group identifiers: {sorted(missing)[:5]}")
+    if sub["ratio_bin"].isna().any():
+        raise ValueError("ratio_bin is missing for one or more requested groups.")
+
+    rng = random.Random(seed)
+    train_ids: list[str] = []
+    val_ids: list[str] = []
+    cal_ids: list[str] = []
+
+    for ratio_bin in sorted(sub["ratio_bin"].unique()):
+        bin_ids = sorted(
+            sub[sub["ratio_bin"] == ratio_bin]["patient_id"].astype(str).tolist()
+        )
+        if len(bin_ids) < 3:
+            raise ValueError(
+                f"ratio_bin {ratio_bin!r} has {len(bin_ids)} groups; "
+                "at least three are required for train/val/cal."
+            )
+        rng.shuffle(bin_ids)
+        n_val = max(1, round(val_ratio * len(bin_ids)))
+        n_cal = max(1, round(cal_ratio * len(bin_ids)))
+        if n_val + n_cal >= len(bin_ids):
+            raise ValueError(
+                f"ratio_bin {ratio_bin!r} is too small for requested ratios."
+            )
+        val_ids.extend(bin_ids[:n_val])
+        cal_ids.extend(bin_ids[n_val:n_val + n_cal])
+        train_ids.extend(bin_ids[n_val + n_cal:])
+
+    train_ids.sort()
+    val_ids.sort()
+    cal_ids.sort()
+    partitions = [set(train_ids), set(val_ids), set(cal_ids)]
+    if any(partitions[i] & partitions[j] for i in range(3) for j in range(i + 1, 3)):
+        raise AssertionError("Generated train/val/cal partitions overlap.")
+    if set().union(*partitions) != ids:
+        raise AssertionError("Generated partitions do not cover every requested group.")
+    return train_ids, val_ids, cal_ids
+
+
 def write_fold_split_manifests(
     archive_path: Path,
     patient_df: pd.DataFrame,

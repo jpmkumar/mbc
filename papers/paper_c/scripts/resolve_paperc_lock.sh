@@ -10,7 +10,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 BASE="nvcr.io/nvidia/pytorch:26.06-py3@sha256:43c018d6a12963f1a1bad85ef8574b5c2a978eec2be0ebcacfb87f69e0d210e1"
-WANT=(timm huggingface_hub scikit-learn scipy seaborn)
+WANT=(timm huggingface_hub transformers safetensors datasets scikit-learn scipy seaborn)
 OUT="docker/requirements-paperc.lock"
 
 echo "Resolving Paper C dependency delta against the pinned NGC base..."
