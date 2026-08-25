@@ -1,0 +1,36 @@
+{
+  "upload_type": "software",
+  "title": "Hybrid classical-quantum breast cancer classification: code release for the IDC histopathology and tabular WBCD studies",
+  "version": "paper-b-v1.0",
+  "license": "mit",
+  "creators": [
+    {
+      "name": "Muthu Kumar, M",
+      "affiliation": "School of Computer Science Engineering and Information Systems, Vellore Institute of Technology, Vellore, India",
+      "orcid": "0009-0000-8120-7465"
+    },
+    {
+      "name": "Selva Rani, B",
+      "affiliation": "School of Computer Science Engineering and Information Systems, Vellore Institute of Technology, Vellore, India"
+    }
+  ],
+  "description": "<p>Training, evaluation, and analysis code for hybrid classical-quantum breast cancer classification.</p><p>The histopathology study evaluates a bolt-on variational quantum head against capacity-controlled classical baselines on the Kaggle Breast Histopathology Images dataset under case-ID-grouped five-fold cross-validation, and reports a null result: validation does not select the quantum stage, and it does not surpass its classical control.</p><p>This snapshot contains the case-level fold manifests that both split partitions depend on, the protocols declared before the confirmatory runs, the Stage-B locked evaluation and its selection record, the width configuration matrix runners, a script that re-derives every width-matrix claim from the raw run artifacts rather than from the reports those runs wrote, and the figure generators. Fold membership must be loaded from the shipped manifests rather than regenerated: StratifiedGroupKFold assignments are not stable across scikit-learn versions, and two environments with byte-identical per-case inputs disagreed on the fold of 231 of the 279 case identifiers.</p><p>Patch images are not redistributed. They are obtained from the Kaggle Breast Histopathology Images dataset under the provider's terms of use.</p>",
+  "keywords": [
+    "breast cancer",
+    "computational pathology",
+    "histopathology",
+    "invasive ductal carcinoma",
+    "quantum machine learning",
+    "variational quantum circuit",
+    "hybrid quantum-classical model",
+    "cross-validation",
+    "equivalence testing"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/jpmkumar/mbc/tree/paper-b-v1.0",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

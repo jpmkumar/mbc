@@ -1,14 +1,43 @@
 cff-version: 1.2.0
-title: Modality-Level Generalized Hybrid Quantum Framework for Breast Cancer Classification
-message: If you use this software, please cite our paper.
+title: >-
+  Hybrid classical-quantum breast cancer classification: code release for the
+  IDC histopathology and tabular WBCD studies
+message: >-
+  If you use this software, please cite it using the metadata below. If you refer
+  to the histopathology study specifically, cite the article reporting it and the
+  paper-b-v1.0 release tag.
+type: software
 authors:
-  - family-names: TBD
-    given-names: Author
+  - family-names: Muthu Kumar
+    given-names: M
+    orcid: https://orcid.org/0009-0000-8120-7465
+    affiliation: >-
+      School of Computer Science Engineering and Information Systems, Vellore
+      Institute of Technology, Vellore, India
+  - family-names: Selva Rani
+    given-names: B
+    affiliation: >-
+      School of Computer Science Engineering and Information Systems, Vellore
+      Institute of Technology, Vellore, India
 repository-code: https://github.com/jpmkumar/mbc
 license: MIT
+version: paper-b-v1.0
 keywords:
   - breast cancer
+  - computational pathology
+  - histopathology
+  - invasive ductal carcinoma
   - quantum machine learning
   - variational quantum circuit
-  - mammography
-  - CBIS-DDSM
+  - hybrid quantum-classical model
+  - cross-validation
+  - equivalence testing
+abstract: >-
+  Training, evaluation, and analysis code for hybrid classical-quantum breast
+  cancer classification. The histopathology study evaluates a bolt-on
+  variational quantum head against capacity-controlled classical baselines on
+  Kaggle Breast Histopathology Images under case-ID-grouped five-fold
+  cross-validation, and reports a null result. The release includes the
+  case-level fold manifests both partitions depend on, the protocols declared
+  before the confirmatory runs, and a script that re-derives the width-matrix
+  claims from the raw run artifacts. Patch images are not redistributed.
