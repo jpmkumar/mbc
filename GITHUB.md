@@ -21,7 +21,7 @@ Use GitHub so code changes on your Mac appear in Colab with `git pull` — no re
 Open Terminal:
 
 ```bash
-cd "/Users/muthu/ResTest/paper1/mbc"
+cd /path/to/mbc
 
 # First-time git setup
 git init
@@ -113,7 +113,7 @@ if not os.path.isdir('data/processed/mammo'):
 ### On Mac
 
 ```bash
-cd "/Users/muthu/ResTest/paper1/mbc"
+cd /path/to/mbc
 git add .
 git commit -m "Describe your change"
 git push

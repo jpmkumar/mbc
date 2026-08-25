@@ -111,7 +111,7 @@ Stage B is 12/30 — safe to resume.
 ## Push code updates from Mac
 
 ```bash
-cd "/Users/muthu/ResTest/paper1/mbc"
+cd /path/to/mbc
 git add .
 git commit -m "Add --stage and --resume training"
 git push

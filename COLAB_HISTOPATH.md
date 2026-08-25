@@ -26,7 +26,7 @@ MyDrive/mbc_colab/Histopathology-dataset.zip
 4. Push latest code from Mac (if you changed anything):
 
 ```bash
-cd "/Users/muthu/ResTest/paper1/mbc"
+cd /path/to/mbc
 git pull
 git push   # if needed
 ```

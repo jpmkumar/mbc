@@ -585,7 +585,7 @@ for label, extra in ABLATIONS:
 ### Local unpack paths (after download)
 
 ```bash
-REPO="/Users/muthu/ResTest/paper1/mbc"
+REPO=/path/to/mbc
 unzip ~/Downloads/mbc_histopath_*_fold0_e3_entnone.zip -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_entnone/"
 unzip ~/Downloads/mbc_histopath_*_fold0_e3_q4.zip       -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_q4/"
 unzip ~/Downloads/mbc_histopath_*_fold0_e3_q12.zip      -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_q12/"
@@ -614,17 +614,18 @@ cd ~/Downloads
 unzip mbc_histopath_*_fold0_e2.zip -d mbc_backup_fold0
 
 # Copy into repo (local only, gitignored)
+REPO=/path/to/mbc
 cp -r ~/Downloads/mbc_backup_*/histopath/* \
-  /Users/muthu/ResTest/paper1/mbc/results/histopath_kaggle/
+  "$REPO/results/histopath_kaggle/"
 
 cp -r ~/Downloads/mbc_backup_*/splits/* \
-  /Users/muthu/ResTest/paper1/mbc/data/splits/histopath_kaggle/
+  "$REPO/data/splits/histopath_kaggle/"
 ```
 
 Per-fold layout (optional):
 
 ```bash
-REPO="/Users/muthu/ResTest/paper1/mbc"
+REPO=/path/to/mbc
 cp -r ~/Downloads/mbc_backup_*_fold0_e2/histopath "$REPO/results/histopath_kaggle_fold0/"
 cp -r ~/Downloads/mbc_backup_*_fold1_e2/histopath "$REPO/results/histopath_kaggle_fold1/"
 # ... fold2, fold3, fold4
