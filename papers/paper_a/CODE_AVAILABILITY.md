@@ -26,12 +26,12 @@ Example after tagging: `git tag paper-a-v1.0 && git push origin paper-a-v1.0`
 | Path | Role |
 |------|------|
 | [`papers/paper_a/`](.) | Paper A index and curated exports |
-| [`src/models/vqc.py`](../../src/models/vqc.py) | Shared VQC head implementation |
-| [`src/models/hybrid_model.py`](../../src/models/hybrid_model.py) | Shared hybrid model |
-| `papers/paper_a/scripts/` | Paper-A-specific export scripts (when added) |
+| [`PROTOCOL.md`](PROTOCOL.md) | Confirmatory CV protocol |
+| [`scripts/train_wbcd_cv.py`](scripts/train_wbcd_cv.py) | Submission experiment (5-fold, malignant metrics, matched MLP) |
+| Separate local pilot-study checkout | Reference holdout code and metrics (not in this repository) |
+| [`src/models/vqc.py`](../../src/models/vqc.py) | Shared VQC head (imaging stack; Paper A script is self-contained) |
 
-Confirmatory WBCD training scripts will live under `papers/paper_a/scripts/` or
-`experiments/wbcd/` when implemented — not under `papers/paper_b/`.
+Do not put WBCD training scripts under `papers/paper_b/`.
 
 ## What is **not** Paper A
 
@@ -50,13 +50,13 @@ Confirmatory WBCD training scripts will live under `papers/paper_a/scripts/` or
 
 Replace `<TAG>` with your release tag at submission time.
 
-## Reproduce pilot metrics (reference)
+## Reproduce study metrics (reference)
 
 ```bash
 git clone https://github.com/jpmkumar/mbc.git
 cd mbc
+python papers/paper_a/scripts/train_wbcd_cv.py
 python papers/paper_a/scripts/export_curated_metrics.py
-# Writes papers/paper_a/results/
 ```
 
-Full confirmatory WBCD pipeline: **pending** — see [`README.md`](README.md).
+See [`PROTOCOL.md`](PROTOCOL.md) and [`README.md`](README.md).

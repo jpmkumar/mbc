@@ -604,6 +604,75 @@ Log `best_stage`, AUPRC, and whether VQC stage B/C ever beats stage A.
 
 ---
 
+## E3 ablation grid — fold 0 (encoding × depth × entanglement)
+
+**What this is:** a controlled re-train of **E3 on fold 0 only**, changing one (or two) VQC knobs at a time while freezing the paper training bundle (same patients, folds, loss, aug, TTA, Fβ). Width (`q4`/`q12`) and `entanglement none` are already done; this grid answers the reviewer question *“was the null result just the wrong encoding / depth / CNOT pattern?”*
+
+| Axis | Values | Meaning |
+|------|--------|---------|
+| **Encoding** | `angle_y` (default), `angle_x`, `angle_z` | Which Pauli axis embeds the 8 classical features |
+| **Depth** | `n_layers` 1 / 2 / 4 | How many RY/RZ(+CNOT) variational blocks |
+| **Entanglement** | `none` / `linear` / `circular` | No CNOT, chain CNOT, or ring CNOT |
+
+**Fixed:** 8 qubits, fold 0, experiment E3, no hyperparameter retuning.
+
+**Local helper (lists cells / builds commands):**
+
+```bash
+python scripts/histopath_ablation_grid.py
+python scripts/histopath_ablation_grid.py --cell L1 --print-cmd
+```
+
+### Pending cells (run on Kaggle — Mac has no GPU)
+
+| Cell | Flags | Backup label | ~Time |
+|------|-------|--------------|-------|
+| `circular` | `--entanglement circular` | `fold0_e3_entcircular` | 3–5 h |
+| `L1` | `--n-layers 1` | `fold0_e3_L1` | 3–5 h |
+| `L4` | `--n-layers 4` | `fold0_e3_L4` | 4–6 h |
+| `enc_ax` | `--encoding angle_x` | `fold0_e3_encax` | 3–5 h |
+| `enc_az` | `--encoding angle_z` | `fold0_e3_encaz` | 3–5 h |
+| `reup` | `--data-reuploading` | `fold0_e3_reup` | 4–6 h |
+| `L1_none` | `--n-layers 1 --entanglement none` | `fold0_e3_L1_entnone` | 3–5 h |
+| `ax_L4` | `--encoding angle_x --n-layers 4` | `fold0_e3_encax_L4` | 4–6 h |
+
+Already done (skip): baseline `e3_v2`, `entnone`, `q4`, `q12`.
+
+### Recommended: one cell per Save & Run All
+
+After clone / pip / `ARCHIVE` / GPU cells (same as Quick single-fold):
+
+```python
+FOLD = 0
+EXPERIMENT = "E3"
+# pick one row from the table above
+ABLATION_FLAGS = "--n-layers 1"          # e.g. L1
+BACKUP_LABEL = "fold0_e3_L1"
+```
+
+```python
+if not os.path.isfile("data/splits/histopath/folds/fold_0/train.csv"):
+    !python data/download/split_histopath_archive.py \
+      --archive-path "{ARCHIVE}" --mode cv --folds 5
+
+!python scripts/train_histopath_cv.py \
+  --fold {FOLD} --experiment {EXPERIMENT} \
+  --archive-path "{ARCHIVE}" {ABLATION_FLAGS}
+```
+
+Then backup with `BACKUP_LABEL` and download the zip before power-off (or use Save & Run All so Output persists).
+
+**Success criterion for the paper:** for each cell, record test bal_acc / F1 / AUPRC and especially `best_stage`. If every cell stays `stage_a`, the expanded ablation supports the null; if any cell prefers Stage B/C and beats E2b, that becomes a new finding to report.
+
+### Local unpack (example)
+
+```bash
+REPO=/path/to/mbc
+unzip ~/Downloads/mbc_histopath_*_fold0_e3_L1.zip -d "$REPO/results/histopath_kaggle_fold0_e3_ablation_L1/"
+```
+
+---
+
 ## Stage 4 — Copy results to Mac
 
 After downloading zips from Kaggle:

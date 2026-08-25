@@ -1,5 +1,15 @@
 # Physical GPU server: primary histopathology experiments
 
+> **STATUS 2026-08-18 — all twelve primary cells are complete and verified.**
+> Reproduce the audit and analysis with:
+>
+> ```bash
+> python scripts/verify_server_width_bundles.py
+> python scripts/aggregate_width_matrix.py
+> ```
+>
+> No further GPU work is queued.
+
 The RTX A4000 server is the primary environment for the complete q4/q8/q12
 width matrix. Kaggle outputs are historical/secondary replications and must
 not be pooled with server results. The governing declaration is
@@ -12,7 +22,8 @@ not be pooled with server results. The governing declaration is
 - NGC PyTorch 26.06 base image, pinned by digest
 - PyTorch 2.13.0a0 NVIDIA 26.06, CUDA runtime 13.3
 - PennyLane 0.45.1
-- 279 patients and 277,524 patches independently verified
+- 279 public case identifiers and 277,524 patches independently verified;
+  patient identity is not recoverable from the derivative
 - canonical five-fold manifest SHA-256:
   `ac9d06510ca3555e6d481f1f870ab92fc69411ee3b9fa53da9aa7a60ce9bd013`
 
@@ -102,6 +113,20 @@ Start the first cell:
 ```bash
 ./scripts/run_histopath_width_server.sh 1 8
 ```
+
+To drain remaining cells **one at a time** (skips any fold-width pair that
+already has `cv_summary.json`, stops on the first failure):
+
+```bash
+./scripts/run_histopath_width_server_queue.sh --dry-run
+# After the current GPU job finishes:
+nohup ./scripts/run_histopath_width_server_queue.sh --wait \
+  > "$HOME/mbc-primary/logs/server_width_queue.nohup" 2>&1 &
+disown
+```
+
+Do not start the queue in a second terminal while a cell is already training
+unless you pass `--wait`. `--wait` polls until the GPU is idle, then continues.
 
 The launcher automatically:
 

@@ -1,5 +1,15 @@
 # Kaggle: end-to-end VQC width ablation
 
+> **STATUS 2026-08-18 — arm retired, do not queue new cells.**
+> The primary width analysis is the completed twelve-cell RTX A4000 matrix in
+> `SERVER_HISTOPATH.md`. This Kaggle arm is closed at six cells: q4 folds 1–4
+> (complete) and q12 folds 1–2, with the five-fold E3 runs as its q8 reference.
+> Its q12 folds 3–4 are **not** required for submission, and they cannot be run
+> on the campus GPU: that hardware produces server cells, which already exist.
+> These runs also use a different patient-to-fold assignment than the committed
+> manifest, so their absolute metrics are never comparable with server metrics.
+> Reopen only to complete the independent Kaggle q12 contrast during revision.
+
 This runbook executes one immutable `(fold, width)` cell from
 `preregistration/histopath_vqc_width_protocol.md`. Fold 0 is already
 exploratory. The eight outstanding replications are folds 1–4 at 4 and

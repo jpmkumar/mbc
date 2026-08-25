@@ -165,6 +165,99 @@ def run_cv(
     )
 
 
+def load_patient_folds(splits_dir: Path) -> list[dict]:
+    """Read committed fold membership from the shipped case-ID lists.
+
+    ``StratifiedGroupKFold`` assignments are not stable across scikit-learn
+    versions, so a published partition can only be reproduced by reading the
+    shipped lists rather than recomputing the split.
+
+    The file and column names say ``patient`` because that is what the Kaggle
+    derivative calls its grouping key. The values are public case identifiers,
+    which the derivative does not establish to be independent patients.
+    """
+    folds_dir = Path(splits_dir) / "folds"
+    entries = []
+    for fold_dir in sorted(folds_dir.glob("fold_*")):
+        train_path = fold_dir / "train_patients.csv"
+        test_path = fold_dir / "test_patients.csv"
+        if not (train_path.is_file() and test_path.is_file()):
+            continue
+        entries.append({
+            "fold": int(fold_dir.name.split("_")[-1]),
+            "train_patient_ids": pd.read_csv(train_path, dtype=str)["patient_id"].tolist(),
+            "test_patient_ids": pd.read_csv(test_path, dtype=str)["patient_id"].tolist(),
+        })
+    if not entries:
+        raise FileNotFoundError(
+            f"No patient-level fold manifests under {folds_dir}. Expected "
+            "fold_*/train_patients.csv and fold_*/test_patients.csv."
+        )
+    return entries
+
+
+def run_from_patient_manifest(
+    archive_path: Path,
+    patient_df: pd.DataFrame,
+    output_dir: Path,
+    seed: int,
+    n_bins: int,
+    skip_existing: bool = False,
+) -> None:
+    folds = load_patient_folds(output_dir)
+    df = assign_ratio_bins(patient_df, n_bins=n_bins)
+    known = set(df["patient_id"].astype(str))
+    fold_column = pd.Series(index=df.index, dtype="Int64")
+
+    print(f"Rebuilding {len(folds)} fold(s) from committed patient manifests")
+    for fold in folds:
+        train_ids = fold["train_patient_ids"]
+        test_ids = fold["test_patient_ids"]
+        unknown = sorted(set(train_ids + test_ids) - known)
+        if unknown:
+            raise ValueError(
+                f"Fold {fold['fold']} lists {len(unknown)} patient(s) missing from "
+                f"the archive, e.g. {unknown[:5]}. The archive does not match the "
+                "manifest."
+            )
+        overlap = sorted(set(train_ids) & set(test_ids))
+        if overlap:
+            raise ValueError(
+                f"Fold {fold['fold']} has {len(overlap)} patient(s) in both train "
+                f"and test, e.g. {overlap[:5]}."
+            )
+        fold_column[df["patient_id"].astype(str).isin(test_ids)] = fold["fold"]
+        fold["train"] = summarize_patients(df, train_ids)
+        fold["test"] = summarize_patients(df, test_ids)
+        print(
+            f"  fold {fold['fold']}: "
+            f"train {fold['train']['patients']} patients / "
+            f"{fold['train']['patches']:,} patches (IDC={fold['train']['idc_ratio']:.3f}), "
+            f"test {fold['test']['patients']} patients / "
+            f"{fold['test']['patches']:,} patches (IDC={fold['test']['idc_ratio']:.3f})"
+        )
+
+    df["test_fold"] = fold_column.astype("Int64")
+    test_ratios = [fold["test"]["idc_ratio"] for fold in folds]
+    print(
+        f"Test IDC ratio across folds: "
+        f"mean={sum(test_ratios)/len(test_ratios):.3f}, "
+        f"std={pd.Series(test_ratios).std(ddof=0):.3f}"
+    )
+
+    write_cv_fold_manifests(
+        archive_path, df, folds, output_dir, skip_existing=skip_existing
+    )
+    write_split_metadata(
+        archive_path, df, output_dir, mode="cv", seed=seed, n_bins=n_bins, folds=folds
+    )
+    print(
+        "Patch manifests rebuilt. patient_stats.csv and split_stats.json were "
+        "rewritten; any difference from the committed copies means the archive "
+        "does not match the published cohort."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Patient-level IDC-ratio-stratified splits for histopath archive"
@@ -184,6 +277,16 @@ def main():
         choices=("cv", "holdout"),
         default="cv",
         help="cv = StratifiedGroupKFold (for mean±std / Friedman); holdout = single 80/20",
+    )
+    parser.add_argument(
+        "--from-patient-manifest",
+        action="store_true",
+        help=(
+            "Rebuild patch manifests from the committed patient-level fold lists "
+            "in --output-dir instead of recomputing the split. Required to "
+            "reproduce published folds, because StratifiedGroupKFold assignments "
+            "are not stable across scikit-learn versions."
+        ),
     )
     parser.add_argument("--folds", type=int, default=5, help="Number of CV folds")
     parser.add_argument("--train-ratio", type=float, default=0.8)
@@ -205,7 +308,19 @@ def main():
     print(f"Patient folders: {len(patient_df)}")
     print(f"Total patches: {int(patient_df['total'].sum()):,}")
 
-    if args.mode == "cv":
+    if args.from_patient_manifest:
+        if args.mode != "cv":
+            parser.error("--from-patient-manifest applies to --mode cv only.")
+        run_from_patient_manifest(
+            archive_path,
+            patient_df,
+            output_dir,
+            args.seed,
+            args.bins,
+            skip_existing=args.skip_existing,
+        )
+        print(f"\nSaved fold manifests under: {output_dir / 'folds'}")
+    elif args.mode == "cv":
         run_cv(
             archive_path,
             patient_df,

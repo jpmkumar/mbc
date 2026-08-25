@@ -20,11 +20,17 @@ def main() -> None:
     if PUBLICATION.exists():
         payload = json.loads(PUBLICATION.read_text())
         if "pilot_wbcd_tabular" in payload:
-            metrics["pilot_wbcd_tabular"] = payload["pilot_wbcd_tabular"]
+            metrics["reference_holdout_wbcd"] = payload["pilot_wbcd_tabular"]
         else:
             missing.append("pilot_wbcd_tabular")
     else:
         missing.append(str(PUBLICATION.relative_to(ROOT)))
+
+    confirmatory = OUT_DIR / "confirmatory_cv.json"
+    if confirmatory.exists():
+        metrics["confirmatory_cv"] = json.loads(confirmatory.read_text())
+    else:
+        missing.append("confirmatory_cv")
 
     snapshot = {
         "exported_utc": stamp,
