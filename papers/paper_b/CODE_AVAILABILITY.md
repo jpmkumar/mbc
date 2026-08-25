@@ -1,7 +1,12 @@
 # Code availability — Paper B (histopathology IDC)
 
 Use these paths when citing the GitHub repository in **Paper B** (Kaggle IDC
-patch classification, patient-level CV, null / equivalence result).
+patch classification, case-ID-grouped CV, null / equivalence result).
+
+The cohort is **277,524 patches under 279 public case identifiers**. The public
+derivative does not establish that those identifiers are 279 independent
+patients, so grouping and cross-validation are described here by case ID, matching
+the manuscript.
 
 ## Repository
 
@@ -33,7 +38,7 @@ https://github.com/jpmkumar/mbc/tree/paper-b-v1.0/papers/paper_b
 | [`scripts/run_histopath_width_server.py`](../../scripts/run_histopath_width_server.py) | Width ablation (server) |
 | [`scripts/evaluate_vqc_stage_b_locked.py`](../../scripts/evaluate_vqc_stage_b_locked.py) | Stage-B locked test |
 | [`configs/histopath.yaml`](../../configs/histopath.yaml) | Fixed training bundle |
-| [`data/download/split_histopath_archive.py`](../../data/download/split_histopath_archive.py) | Patient-level splits |
+| [`data/download/split_histopath_archive.py`](../../data/download/split_histopath_archive.py) | Case-ID-grouped splits |
 | [`preregistration/`](../../preregistration/) | Stage-B and width protocols |
 | [`KAGGLE_HISTOPATH.md`](../../KAGGLE_HISTOPATH.md) | Primary Kaggle runbook |
 | [`KAGGLE_HISTOPATH_WIDTH_ABLATION.md`](../../KAGGLE_HISTOPATH_WIDTH_ABLATION.md) | Width ablation runbook |
@@ -49,7 +54,7 @@ https://github.com/jpmkumar/mbc/tree/paper-b-v1.0/papers/paper_b
 
 > Code for the histopathology experiments is available at
 > https://github.com/jpmkumar/mbc (directory `papers/paper_b/`, tag `<TAG>`).
-> Training scripts, patient-level split generation, and the preregistered
+> Training scripts, case-ID-grouped split generation, and the preregistered
 > protocols are included. Patch images are obtained from the Kaggle Breast
 > Histopathology Images dataset; they are not redistributed in the repository.
 

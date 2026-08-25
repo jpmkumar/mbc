@@ -247,7 +247,7 @@ def plot_fig1() -> Path:
     ax.text(
         0.02,
         0.12,
-        "Patient-level 5-fold StratifiedGroupKFold · focal loss · strong aug · TTA · Fβ (β=1.5)",
+        "Case-ID-grouped 5-fold StratifiedGroupKFold · focal loss · strong aug · TTA · Fβ (β=1.5)",
         fontsize=8,
         style="italic",
         color="#444444",
@@ -432,7 +432,7 @@ def plot_fig4() -> Path:
     ax.set_ylim(0, 1)
     ax.axis("off")
     ax.set_title(
-        "Patient-level stratified group 5-fold cross-validation",
+        "Case-ID-grouped stratified 5-fold cross-validation",
         fontsize=12,
         fontweight="bold",
         pad=10,
@@ -441,7 +441,7 @@ def plot_fig4() -> Path:
     ax.text(
         0.50,
         0.86,
-        "Patient pool — 279 patients · 277,524 patches",
+        "Public case-ID pool — 279 identifiers · 277,524 patches",
         ha="center",
         fontsize=10,
         fontweight="bold",

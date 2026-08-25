@@ -86,6 +86,7 @@ papers/*/scripts/build_frontiers_package.sh
 papers/*/scripts/build_submission_package.sh
 papers/*/scripts/export_figures_tiff.py
 papers/*/scripts/check_text_overlap.py
+papers/*/scripts/verify_references.py
 
 # Local drafts and working documents
 InitialPaperInfo.docx

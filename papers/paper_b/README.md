@@ -1,10 +1,16 @@
 # Paper B — Histopathology IDC hybrid QML (null / equivalence)
 
-**Data:** Kaggle Breast Histopathology Images — **277,524 patches**, **279 patients** (image patches, not tabular).
+**Data:** Kaggle Breast Histopathology Images — **277,524 patches** under
+**279 public case identifiers** (image patches, not tabular). The public
+derivative does not establish that these identifiers are 279 independent
+patients, so grouping is described by case ID throughout.
 
-**Claim:** Under patient-level CV, focal loss, TTA, and matched classical controls, a
-**bolt-on VQC head does not beat** a parameter-matched MLP; Stage-B frozen-head
-equivalence and end-to-end width ablations (q4/q8/q12) extend the evaluation.
+**Claim:** Under case-ID-grouped CV, focal loss, TTA, and capacity-controlled
+classical baselines, the quantum-active stages of the E3 hybrid schedule never
+survive validation selection: every deployed E3 predictor uses the Stage-A linear
+route. Stage-B frozen-head evaluation and end-to-end width runs (q4/q8/q12) are
+reported separately and must not be conflated with direct VQC performance in the
+stage-selected E3 aggregates.
 
 **Active experiments:** Kaggle width cells (e.g. `FOLD=3`, `N_QUBITS=4`), server-primary matrix when campus access returns.
 
