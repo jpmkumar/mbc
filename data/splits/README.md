@@ -33,7 +33,24 @@ split is therefore not a valid way to reproduce any published number.
 
 Case-ID fold membership is committed for exactly this reason. Patch-level
 manifests stay untracked because they are large and can be rebuilt losslessly
-from the case-ID lists plus the archive.
+from the case-ID lists plus the archive:
+
+```bash
+python data/download/split_histopath_archive.py \
+    --archive-path /path/to/IDC_regular_ps50_idx5 \
+    --output-dir data/splits/histopath \
+    --mode cv --from-patient-manifest
+```
+
+That reads the committed case-ID lists instead of recomputing the split, and
+fails rather than guessing if the archive and the manifests disagree. It also
+rewrites `patient_stats.csv` and `split_stats.json`; any difference from the
+committed copies means the archive is not the published cohort.
+
+The shipped manifests were generated under `scikit-learn==1.9.0`, pinned in
+[`docker/requirements-server.lock`](../../docker/requirements-server.lock).
+The floors in `requirements.txt` are deliberately loose for everyday installs,
+so do not rely on them to reproduce a partition — use the manifests.
 
 ### The two partitions, and which results used which
 
