@@ -67,6 +67,11 @@ training:
   stage_a_epochs: 25
   stage_b_epochs: 15
   stage_c_epochs: 3
+  # false reproduces the published runs: each stage resumes from the previous
+  # stage's terminal weights while selection compares per-stage best
+  # checkpoints. true starts each stage from the preceding stage's best
+  # checkpoint; see preregistration/staged_hybrid_fair_warmup_protocol.md.
+  stage_init_from_best: false
   lr_classical: 1.0e-4
   lr_quantum: 1.0e-4
   lr_joint: 1.0e-5

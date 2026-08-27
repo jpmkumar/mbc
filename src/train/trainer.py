@@ -145,6 +145,13 @@ class HybridTrainer:
         self.early_stopping_patience = int(
             train_cfg.get("early_stopping_patience", 0) or 0
         )
+        # Off by default: the published five-fold and width results were produced
+        # with each stage resuming from the previous stage's terminal weights,
+        # while selection compares per-stage best checkpoints. Enabling this makes
+        # the starting point consistent with the comparison, which changes results.
+        self.stage_init_from_best = bool(
+            train_cfg.get("stage_init_from_best", False)
+        )
         self.grad_clip_norm = float(train_cfg.get("grad_clip_norm", 0.0) or 0.0)
         self.val_interval = max(1, int(train_cfg.get("val_interval", 1)))
         self.checkpoint_interval = max(
@@ -200,6 +207,7 @@ class HybridTrainer:
             for stage in self.STAGES
         }
         self.stage_epochs_done = {s: 0 for s in self.STAGES}
+        self.stage_transitions: list[dict] = []
         self.total_epochs = 0
         self._epochs_without_improvement = 0
         self._feature_loaders: dict[str, DataLoader] = {}
@@ -284,6 +292,30 @@ class HybridTrainer:
             allowed = set(stages_filter)
             stages = [(name, n) for name, n in stages if name in allowed]
         return stages
+
+    def _restore_preceding_stage_best(self, stage: str) -> dict | None:
+        """Load the best checkpoint of the nearest preceding stage that has one.
+
+        Returns a record of what was restored, or None when nothing applies.
+        """
+        if stage not in self.STAGES:
+            return None
+        index = self.STAGES.index(stage)
+        for previous in reversed(self.STAGES[:index]):
+            record = self.best_by_stage[previous]
+            if record["state_dict"] is None:
+                continue
+            filtered, _ = filter_compatible_state_dict(
+                self.model, record["state_dict"]
+            )
+            self.model.load_state_dict(filtered, strict=False)
+            return {
+                "stage": stage,
+                "restored_from": previous,
+                "restored_score": float(record["score"]),
+                "restored_stage_epoch": record.get("stage_epoch"),
+            }
+        return None
 
     def _configure_stage(self, stage: str):
         if hasattr(self.model, "set_training_stage"):
@@ -1034,6 +1066,16 @@ class HybridTrainer:
                 print(f"Skipping {stage_name} ({already_done}/{n_epochs} epochs done)")
                 continue
 
+            if self.stage_init_from_best and already_done == 0:
+                restored = self._restore_preceding_stage_best(stage_name)
+                if restored is not None:
+                    self.stage_transitions.append(restored)
+                    print(
+                        f"{stage_name}: initialised from best {restored['restored_from']} "
+                        f"checkpoint ({self.selection_metric}="
+                        f"{restored['restored_score']:.4f})"
+                    )
+
             self._configure_stage(stage_name)
             self._prepare_feature_loaders(stage_name)
             self._epochs_without_improvement = 0
@@ -1148,6 +1190,8 @@ class HybridTrainer:
         final_metrics["best_val_score"] = self.best_score
         final_metrics["best_stage"] = self.best_stage
         final_metrics["stage_epochs_done"] = dict(self.stage_epochs_done)
+        final_metrics["stage_init_from_best"] = self.stage_init_from_best
+        final_metrics["stage_transitions"] = list(self.stage_transitions)
 
         stage_comparison = self._evaluate_stage_attribution()
         if stage_comparison:
