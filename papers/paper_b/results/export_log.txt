@@ -1,0 +1,25 @@
+export_utc=2026-08-27T11:59:17Z
+output=papers/paper_b/results/curated_metrics.json
+present:
+  - stage_b_v2_final: results/histopath/vqc_stage_b_crossfold_v2_final.json
+  - stage_b_v3_final: results/histopath/vqc_stage_b_crossfold_v3_final.json
+  - stage_b_v2_sensitivity: results/histopath/vqc_stage_b_crossfold_v2_sensitivity_folds1_4.json
+  - stage_b_v3_sensitivity: results/histopath/vqc_stage_b_crossfold_v3_sensitivity_folds1_4.json
+  - width_matrix_analysis: results/histopath/width_matrix_analysis.json
+  - server_width_matrix: results/histopath/server_width_matrix.json
+  - deployed_arms/E2/fold_0: results/histopath_kaggle_fold0_e2_v2/cv_summary.json
+  - deployed_arms/E2/fold_1: results/histopath_kaggle_fold1_e2_v2/cv_summary.json
+  - deployed_arms/E2/fold_2: results/histopath_kaggle_fold2_e2_v2/mbc_backup_20260718_1102_fold2_e2/histopath/cv_summary.json
+  - deployed_arms/E2/fold_3: results/histopath_kaggle_fold3_e2_v2/mbc_backup_20260718_1038_fold3_e2/histopath/cv_summary.json
+  - deployed_arms/E2/fold_4: results/histopath_kaggle_fold4_e2_v2/mbc_backup_20260718_1606_fold4_e2/histopath/cv_summary.json
+  - deployed_arms/E2b/fold_0: results/histopath_kaggle_fold0_e2b/mbc_backup_20260718_1600_fold0_e2b/histopath/cv_summary.json
+  - deployed_arms/E2b/fold_1: results/histopath_kaggle_fold1_e2b/mbc_backup_20260718_2057_fold1_e2b/histopath/cv_summary.json
+  - deployed_arms/E2b/fold_2: results/histopath_kaggle_fold2_e2b/mbc_backup_20260718_2118_fold2_e2b/histopath/cv_summary.json
+  - deployed_arms/E2b/fold_3: results/histopath_kaggle_fold3_e2b/mbc_backup_20260719_0416_fold3_e2b/histopath/cv_summary.json
+  - deployed_arms/E2b/fold_4: results/histopath_kaggle_fold4_e2b/mbc_backup_20260719_0541_fold4_e2b/histopath/cv_summary.json
+  - deployed_arms/E3/fold_0: results/histopath_kaggle_fold0_e3_v2/mbc_backup_20260719_1257_fold0_e3/histopath/cv_summary.json
+  - deployed_arms/E3/fold_1: results/histopath_kaggle_fold1_e3_v2/mbc_backup_20260719_1135_fold1_e3/histopath/cv_summary.json
+  - deployed_arms/E3/fold_2: results/histopath_kaggle_fold2_e3_v2/mbc_backup_20260719_1641_fold2_e3/histopath/cv_summary.json
+  - deployed_arms/E3/fold_3: results/histopath_kaggle_fold3_e3_v2/mbc_backup_20260719_2034_fold3_e3/histopath/cv_summary.json
+  - deployed_arms/E3/fold_4: results/histopath_kaggle_fold4_e3_v2/mbc_backup_20260720_0414_fold4_e3/histopath/cv_summary.json
+missing:

@@ -107,6 +107,14 @@ papers/paper_a/assets/
 papers/paper_a/**/*.docx
 papers/paper_a/**/*.pdf
 papers/paper_b/results/
+# Released with the code so the Data Availability Statement is accurate: the
+# curated snapshot is the experiment summary the reported tables and figures are
+# generated from. Everything else in the directory stays local.
+!papers/paper_b/results/
+papers/paper_b/results/*
+!papers/paper_b/results/curated_metrics.json
+!papers/paper_b/results/export_log.txt
+!papers/paper_b/results/README.md
 papers/paper_b/assets/
 papers/paper_b/submission/
 papers/paper_b/**/*.docx
