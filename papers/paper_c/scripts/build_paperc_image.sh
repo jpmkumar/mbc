@@ -11,7 +11,7 @@ LOCK="docker/requirements-paperc.lock"
 # This value is replaced once on the qualified server after resolving against
 # the pinned NGC base. Confirmatory images must never accept an environment
 # override or an unqualified lock.
-EXPECTED_LOCK_SHA="REPLACE_AFTER_SERVER_RESOLUTION"
+EXPECTED_LOCK_SHA="618ac492ebc7bafdc605008eb5d01d7980fafe9720527f7128e6faff77800e40"
 
 if [[ ! -f "$LOCK" ]]; then
   echo "Missing $LOCK - run papers/paper_c/scripts/resolve_paperc_lock.sh first." >&2

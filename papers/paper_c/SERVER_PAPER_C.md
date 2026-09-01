@@ -179,17 +179,27 @@ MANIFEST="$MBC_PRIMARY_ROOT/provenance/paper-c/idc_patch_manifest.csv"
 for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
   CACHE="$MBC_PRIMARY_ROOT/embeddings/${encoder}_upsample224"
   for seed in 42 43 44; do
+    # Co-primary: both arms harmonised, so the contrast isolates grouping.
     python papers/paper_c/scripts/run_idc_probe_cv.py \
       --cache "$CACHE" --patch-manifest "$MANIFEST" --protocol random \
-      --seed "$seed" \
+      --weighting case-balanced --seed "$seed" \
       --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/idc/${encoder}/random-k1/seed-${seed}"
     python papers/paper_c/scripts/run_idc_probe_cv.py \
       --cache "$CACHE" --patch-manifest "$MANIFEST" --protocol grouped \
-      --seed "$seed" \
+      --weighting case-balanced --seed "$seed" \
       --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/idc/${encoder}/grouped-k1/seed-${seed}"
+    # Ordered secondary: conventional random-patch recipe, for the bundled
+    # protocol-regime contrast against the same grouped arm.
+    python papers/paper_c/scripts/run_idc_probe_cv.py \
+      --cache "$CACHE" --patch-manifest "$MANIFEST" --protocol random \
+      --weighting protocol-native --seed "$seed" \
+      --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/idc/${encoder}/random-k1-bundled/seed-${seed}"
   done
 done
 ```
+
+Each bundle's `summary.json` records its `weighting`. Never pair predictions
+from different regimes.
 
 Average each condition's seed-42/43/44 OOF files before any bootstrap or metric
 comparison:
@@ -197,7 +207,7 @@ comparison:
 ```bash
 IDC_ROOT="$MBC_PRIMARY_ROOT/results/paper-c/idc"
 for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
-  for condition in random-k1 grouped-k1; do
+  for condition in random-k1 grouped-k1 random-k1-bundled; do
     python papers/paper_c/scripts/average_seed_predictions.py \
       --prediction "$IDC_ROOT/${encoder}/${condition}/seed-42/oof_predictions.csv" --seed 42 \
       --prediction "$IDC_ROOT/${encoder}/${condition}/seed-43/oof_predictions.csv" --seed 43 \
@@ -329,6 +339,17 @@ python papers/paper_c/scripts/holm_coprimary.py \
   --protocol-report "$INF/delta_protocol.json" \
   --context-report  "$INF/delta_context.json" \
   --output "$INF/coprimary_holm.json"
+```
+
+The bundled protocol regime is an ordered secondary and stays outside the Holm
+family:
+
+```bash
+python papers/paper_c/scripts/paired_case_bootstrap.py \
+  --left  "$IDC_ROOT/uni2_h/random-k1-bundled/seed_mean_predictions.csv" \
+  --right "$IDC_ROOT/uni2_h/grouped-k1/seed_mean_predictions.csv" \
+  --left-label random-k1-bundled --right-label grouped-k1 \
+  --replicates 10000 --output "$INF/delta_protocol_bundled.json"
 ```
 
 For BCSS the same script treats `case_id` as the TCGA patient identifier and

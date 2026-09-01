@@ -91,14 +91,18 @@ def weighted_ap(y: np.ndarray, p: np.ndarray, cases: np.ndarray) -> float:
     return float(average_precision_score(y, p, sample_weight=case_weights(cases)))
 
 
-def choose_threshold(y: np.ndarray, probabilities: np.ndarray) -> float:
+def choose_threshold(
+    y: np.ndarray,
+    probabilities: np.ndarray,
+    weights: np.ndarray | None = None,
+) -> float:
     candidates = np.unique(probabilities)
     if len(candidates) > 5_000:
         candidates = np.quantile(probabilities, np.linspace(0, 1, 5_001))
     best_threshold = 0.5
     best_mcc = -math.inf
     for threshold in candidates:
-        mcc = matthews_corrcoef(y, probabilities >= threshold)
+        mcc = matthews_corrcoef(y, probabilities >= threshold, sample_weight=weights)
         if mcc > best_mcc or (mcc == best_mcc and threshold > best_threshold):
             best_mcc = mcc
             best_threshold = float(threshold)
@@ -150,6 +154,17 @@ def main() -> int:
     parser.add_argument("--cache", required=True, type=Path)
     parser.add_argument("--patch-manifest", required=True, type=Path)
     parser.add_argument("--protocol", required=True, choices=("grouped", "random"))
+    parser.add_argument(
+        "--weighting",
+        choices=("case-balanced", "protocol-native"),
+        default="case-balanced",
+        help=(
+            "case-balanced harmonises fitting, tuning, calibration and threshold "
+            "weighting across both arms so the protocol contrast isolates grouping. "
+            "protocol-native keeps each arm's conventional weighting and yields the "
+            "preregistered bundled-regime secondary contrast."
+        ),
+    )
     parser.add_argument(
         "--inner-case-splits",
         type=Path,
@@ -235,6 +250,7 @@ def main() -> int:
     fold_column = (
         "grouped_outer_fold" if args.protocol == "grouped" else "random_outer_fold"
     )
+    case_weighted = args.weighting == "case-balanced" or args.protocol == "grouped"
     oof_parts: list[pd.DataFrame] = []
     fold_reports: list[dict[str, object]] = []
 
@@ -252,7 +268,6 @@ def main() -> int:
         y_train = frame.loc[train, "label"].to_numpy()
         y_val = frame.loc[val, "label"].to_numpy()
         y_cal = frame.loc[cal, "label"].to_numpy()
-        y_test = frame.loc[outer_test, "label"].to_numpy()
         row_train = frame.loc[train, "_embedding_row"].to_numpy()
         scaler = StandardScaler()
         x_train = scaler.fit_transform(
@@ -265,7 +280,7 @@ def main() -> int:
             )
         ).astype(np.float32, copy=False)
 
-        if args.protocol == "grouped":
+        if case_weighted:
             fit_weights = case_weights(frame.loc[train, "case_id"].to_numpy())
         else:
             fit_weights = compute_sample_weight("balanced", y_train)
@@ -288,7 +303,7 @@ def main() -> int:
                     val_probability,
                     frame.loc[val, "case_id"].to_numpy(),
                 )
-                if args.protocol == "grouped"
+                if case_weighted
                 else float(average_precision_score(y_val, val_probability))
             )
             tuning.append((objective, alpha, classifier))
@@ -303,12 +318,18 @@ def main() -> int:
         cal_logits = model.decision_function(x_cal)
         cal_weights = (
             case_weights(frame.loc[cal, "case_id"].to_numpy())
-            if args.protocol == "grouped"
+            if case_weighted
             else np.ones(len(cal))
         )
         temperature = fit_temperature(cal_logits, y_cal, cal_weights)
         val_probability = expit(model.decision_function(x_val) / temperature)
-        threshold = choose_threshold(y_val, val_probability)
+        threshold = choose_threshold(
+            y_val,
+            val_probability,
+            case_weights(frame.loc[val, "case_id"].to_numpy())
+            if case_weighted
+            else None,
+        )
 
         x_test = scaler.transform(
             np.asarray(
@@ -355,6 +376,8 @@ def main() -> int:
     summary = {
         "complete": True,
         "protocol": args.protocol,
+        "weighting": args.weighting,
+        "case_weighted_fitting": case_weighted,
         "cache": str(args.cache),
         "cache_provenance_sha256": sha256(args.cache / "provenance.json"),
         "cache_index_sha256": sha256(args.cache / "index.csv"),

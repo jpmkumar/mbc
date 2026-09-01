@@ -10,14 +10,19 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 BASE="nvcr.io/nvidia/pytorch:26.06-py3@sha256:43c018d6a12963f1a1bad85ef8574b5c2a978eec2be0ebcacfb87f69e0d210e1"
-WANT=(timm huggingface_hub transformers safetensors datasets scikit-learn scipy seaborn)
+# pytest is required twice over: the runbook runs the unit tests inside the
+# qualified image, and the NGC base ships triton-kernels, which declares pytest
+# as a dependency, so `pip check` fails without it.
+WANT=(timm huggingface_hub transformers safetensors datasets scikit-learn scipy seaborn pytest)
 OUT="docker/requirements-paperc.lock"
 
 echo "Resolving Paper C dependency delta against the pinned NGC base..."
 docker run --rm "$BASE" bash -lc "
   set -e
   python -m pip freeze --disable-pip-version-check > /tmp/before.txt 2>/dev/null
-  python -m pip install --quiet --no-cache-dir ${WANT[*]} >/dev/null 2>&1
+  # Send installer output to stderr: a silent failure here would yield a
+  # truncated lock that still looks plausible.
+  python -m pip install --no-cache-dir ${WANT[*]} >&2
   python -m pip freeze --disable-pip-version-check > /tmp/after.txt 2>/dev/null
   comm -13 <(sort /tmp/before.txt) <(sort /tmp/after.txt)
 " | grep -E '^[A-Za-z0-9._-]+==' | sort > "$OUT"

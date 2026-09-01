@@ -19,6 +19,7 @@ Ahmed2025IDC            10.2196/62996
 Swin2026DAMF            10.1038/s41598-026-37969-y
 BenRabah2026FMIDC       10.3390/make8060164
 CrossSite2025IDC        10.3390/app152312819
+AlShowarah2026Protocol  10.15849/ijasca.v18i2.69
 
 # --- Evaluation integrity: leakage, patient-level splits, reporting ---
 Priyanka2026            10.3389/fdgth.2026.1752938

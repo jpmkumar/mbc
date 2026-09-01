@@ -2,13 +2,19 @@
 
 **Status:** DRAFT — not yet outcome-locked.  
 **Created:** 2026-08-21.  
-**Lock condition:** change status to `LOCKED`, record the source commit, model
-snapshot revisions, split/index hashes and protocol SHA-256 before any labelled
-comparative probe is run.
+**Amended:** 2026-09-01.  
+**Lock condition:** change status to `LOCKED`, then complete the lock procedure
+in section 11 before any labelled comparative probe is run.
 
 Engineering tests that load models, inspect dimensions, assemble synthetic
 mosaics or extract a small unlabeled cache are permitted while this document is
 draft. Comparative performance inspection is not.
+
+The 2026-09-01 amendment, made before any labelled comparison, harmonises the
+weighting regime across both arms of the co-primary protocol contrast so that it
+isolates grouping, demotes the conventional bundled regime to an ordered
+secondary, declares a smallest effect size of interest, and replaces the
+self-referential lock record with an external lock manifest.
 
 ## 1. Research questions
 
@@ -89,16 +95,34 @@ Inside each outer-training pool, create label-stratified
   200 epochs).
 - Candidate L2 `alpha` values:
   `{1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1}`.
-- Fit with case-balanced sample weights in grouped analyses and ordinary
-  class-balanced weights in random-patch analyses.
-- Select regularisation by validation case-balanced AUPRC in grouped analyses
-  and validation AUPRC in random analyses.
 - Fit temperature scaling on calibration data only.
 - Select the binary operating threshold on validation data only by maximum MCC;
   ties choose the higher threshold.
+- Where two `alpha` values tie on the validation objective, select the smaller
+  value.
 
-The search grid and fitting tolerance are identical across models and
-conditions.
+### Weighting regimes
+
+The confirmatory contrast must isolate grouping, so the co-primary analysis runs
+both arms under one identical weighting regime.
+
+- **Harmonised (`--weighting case-balanced`, co-primary).** Both arms give each
+  case identifier equal total weight when fitting the probe, when scoring the
+  validation objective, when fitting temperature and when selecting the
+  operating threshold. The only difference between the arms is how patches are
+  assigned to folds and inner partitions.
+- **Bundled (`--weighting protocol-native`, ordered secondary).** The grouped
+  arm is unchanged; the random arm reverts to the conventional random-patch
+  recipe of class-balanced fitting weights, unweighted validation AUPRC and
+  patch-equal calibration. This estimates the difference a reader would observe
+  between a conventionally executed random-patch study and a grouped one.
+
+The harmonised contrast supports statements about grouping. The bundled contrast
+supports statements about published random-patch practice as a whole, and must
+never be described as isolating grouping.
+
+The search grid, fitting tolerance and weighting regime are identical across
+models within a contrast.
 
 ## 5. Context construction
 
@@ -135,26 +159,50 @@ at least 80% valid pixels and 80% class purity in the centre 50×50 region.
 ## 6. Co-primary estimands
 
 1. `Δ_protocol`: IDC random-patch minus case-ID-grouped case-balanced AUPRC for
-   UNI2-h at `K=1`, using paired out-of-fold predictions for all patches.
+   UNI2-h at `K=1` under the **harmonised** weighting regime, using paired
+   out-of-fold predictions for all patches.
 2. `Δ_context`: IDC grouped `K=9` minus `K=1` case-balanced AUPRC for UNI2-h on
    complete-neighbourhood centres.
 
 Holm's procedure controls family-wise error at 0.05 across these two tests.
-Two-sided 95% intervals are reported. No minimum effect is assumed; estimates
-and intervals, not a significance label alone, determine interpretation.
+Two-sided 95% intervals are reported.
+
+### Smallest effect size of interest
+
+A difference of **0.01 case-balanced AUPRC** is the preregistered smallest
+effect of interest for both co-primary contrasts. It is the scale against which
+the pre-outcome simulation in `papers/paper_c/results/precision_simulation.md`
+judged seed-averaging noise to be negligible, so effects below it cannot be
+separated from optimisation noise under this design.
+
+Interpretation is driven by the estimate and interval, not by a significance
+label alone. A confidence interval lying entirely inside ±0.01 supports the
+statement that no effect of interest was detected. An interval that merely
+includes zero while extending beyond ±0.01 is inconclusive and must be reported
+as such.
 
 ## 7. Ordered secondary analyses
 
-1. Protocol and context contrasts for the remaining encoders.
-2. Model-rank Kendall correlation and rank changes across protocols/contexts.
-3. Unweighted AUPRC and case-balanced/clustered AUROC.
-4. MCC, sensitivity and specificity at validation-locked thresholds.
-5. Calibration intercept/slope, Brier score, log loss and reliability plots.
-6. BCSS `K=9 − K=1` context replication for UNI2-h, followed by other encoders.
-7. Empirical risk–coverage curves.
-8. BCSS ROI-level tumour-area agreement.
-9. A separately declared last-block fine-tuning sensitivity analysis, only if
-   the full frozen-probe primary matrix is complete.
+1. The bundled-regime protocol contrast for UNI2-h, reported alongside the
+   harmonised co-primary so the contribution of conventional random-patch
+   tuning practice is visible.
+2. Protocol and context contrasts for the remaining encoders.
+3. Model-rank changes across protocols and contexts, with rank uncertainty
+   computed inside synchronised whole-case bootstrap replicates rather than
+   from a five-model Kendall p-value.
+4. Unweighted AUPRC and case-balanced/clustered AUROC.
+5. MCC, sensitivity and specificity at validation-locked thresholds.
+6. Calibration intercept/slope, Brier score, log loss and reliability plots.
+7. BCSS `K=9 − K=1` context replication for UNI2-h, followed by other encoders.
+8. Empirical risk–coverage curves.
+9. BCSS ROI-level tumour-area agreement.
+10. A separately declared last-block fine-tuning sensitivity analysis, only if
+    the full frozen-probe primary matrix is complete.
+
+Secondary analyses are not corrected as a family; they are ordered and reported
+descriptively. An analysis in this list that has no committed, tested
+implementation at the moment of lock is demoted to exploratory and is labelled
+as such in the manuscript.
 
 No decision-curve, clinical workload, formal conformal, fairness, carbon or
 distillation analysis is primary or confirmatory.
@@ -208,24 +256,47 @@ Completed prediction bundles are immutable. Operational failures may resume from
 verified checkpoints; completed finite runs are not repeated because their
 results are inconvenient.
 
-## 11. Protocol-lock record
+## 11. Protocol-lock procedure
 
-Complete before changing status to `LOCKED`:
+A document cannot contain its own digest, the commit that introduces it, or the
+digest of an image built from that commit. The lock is therefore recorded in a
+separate artifact created after this file is frozen.
 
-- Source commit: `TBD`
-- Container image ID: `TBD`
-- Dependency lock SHA-256: `TBD`
-- IDC dataset SHA-256: `TBD`
-- IDC outer split manifest SHA-256:
-  `ac9d06510ca3555e6d481f1f870ab92fc69411ee3b9fa53da9aa7a60ce9bd013`
-- IDC inner split summary SHA-256:
-  `f2fe95231edd3fe036b1617421609f05590fa1662782bf91de2b12e31b037b33`
-- IDC coordinate/eligibility index SHA-256:
-  `e970ae0b03b4c1f9fbbd8bebcbe6082b309c610a0844f4c55cfd45a4df20f1b7`
-- IDC filepath-keyed protocol manifest SHA-256:
-  `b28e4acc2c3482256c17971cd422e39713d5ca4df860bc2929a31b3104caa266`
-- BCSS dataset SHA-256: `TBD`
-- BCSS split manifest SHA-256: `TBD`
-- Model registry SHA-256:
-  `28da488906a2bb4e3725cc279624e6e3b0ede0ad67a7c5f8ebd98aaa1d4cfdb7`
-- Protocol SHA-256: `TBD`
+**Stage 1 — freeze the protocol.** Set the status line to `LOCKED`, commit this
+file together with the code and split artifacts it references, and change
+nothing afterwards.
+
+**Stage 2 — write the external lock manifest.** From that commit, build the
+container image, then write `preregistration/paper_c_lock.json` recording:
+
+- the Stage-1 source commit;
+- the SHA-256 of this protocol file at that commit;
+- the container image digest and the dependency-lock SHA-256;
+- the IDC dataset archive SHA-256;
+- the SHA-256 of every split, eligibility and manifest artifact actually read by
+  the run, each identified by repository-relative path;
+- the BCSS mirror tree hash, patient-split and centre-manifest SHA-256;
+- the model-registry SHA-256 and each encoder's resolved revision and weight
+  digests.
+
+Every digest is taken over the exact bytes as committed. Artifacts generated on
+the server rather than committed are recorded by absolute path and digest in the
+same manifest, and each run's own provenance file must reproduce those digests
+or abort.
+
+**Stage 3 — verify.** Recompute every digest in the manifest from a clean
+checkout of the Stage-1 commit before the first labelled run. Any mismatch
+voids the lock and requires a new Stage 1.
+
+Artifacts known at drafting time, to be re-verified rather than trusted:
+
+| Artifact | Path | SHA-256 at drafting |
+|---|---|---|
+| IDC inner split summary | `data/splits/paper_c/idc/inner_split_summary.json` | `46e8f4494422ac201a53ee5a9c8438fcd11c9a128ba87ebe12c6aa721e14de00` |
+| Model registry | `papers/paper_c/config/model_registry.json` | `28da488906a2bb4e3725cc279624e6e3b0ede0ad67a7c5f8ebd98aaa1d4cfdb7` |
+| IDC coordinate/eligibility index | server-generated | `e970ae0b03b4c1f9fbbd8bebcbe6082b309c610a0844f4c55cfd45a4df20f1b7` |
+| IDC filepath-keyed protocol manifest | server-generated | `b28e4acc2c3482256c17971cd422e39713d5ca4df860bc2929a31b3104caa266` |
+
+The IDC outer split manifest digest is inherited from the shared histopathology
+release and must be re-stated in the lock manifest against an explicit path,
+because the previously recorded value did not identify which file it covered.

@@ -84,10 +84,20 @@ condition receives:
 - the same inner-validation objective;
 - the same number of fitting attempts.
 
-The grouped and random arms tune separately because their validation
-distributions differ, but their search budgets are identical. Model-specific
-vendor transforms are retained because they are part of the pretrained
-representation; no downstream statistics are re-estimated from outer-test data.
+For the co-primary contrast both arms additionally share one weighting regime:
+each case identifier carries equal total weight when fitting the probe, scoring
+the validation objective, fitting temperature and selecting the threshold. The
+arms then differ only in how patches reach folds and inner partitions, so the
+contrast is attributable to grouping.
+
+A second, ordered-secondary contrast restores the conventional random-patch
+recipe (class-balanced fitting weights, unweighted validation AUPRC, patch-equal
+calibration). That version estimates the gap against random-patch practice as
+published, and must not be described as isolating grouping.
+
+Model-specific vendor transforms are retained because they are part of the
+pretrained representation; no downstream statistics are re-estimated from
+outer-test data.
 
 Last-block fine-tuning is secondary and uses a separately preregistered,
 architecture-aware budget. It cannot replace or redefine the frozen-probe
@@ -98,7 +108,8 @@ primary analysis.
 Two co-primary contrasts are fixed:
 
 1. **Protocol optimism:** random-patch minus case-ID-grouped case-balanced AUPRC
-   for the reference encoder at `K=1`.
+   for the reference encoder at `K=1`, both arms under the harmonised weighting
+   regime.
 2. **Context gain:** `K=9` minus `K=1` case-ID-grouped case-balanced AUPRC for
    the same encoder on complete-neighbourhood centres.
 

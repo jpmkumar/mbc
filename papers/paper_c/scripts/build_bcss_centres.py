@@ -169,7 +169,12 @@ def main() -> int:
     report = {
         "images": len(image_paths),
         "patients": len(patient_roles),
-        "test_sites": sorted(TEST_SITES),
+        "test_sites": sorted(
+            {row["site"] for row in rows if row["split"] == "test"}
+        ),
+        "development_sites": sorted(
+            {row["site"] for row in rows if row["split"] != "test"}
+        ),
         "split_patient_counts": {
             split: len(patients) for split, patients in split_patients.items()
         },
