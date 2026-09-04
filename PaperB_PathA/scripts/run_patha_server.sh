@@ -73,16 +73,13 @@ Patch-level manifests are missing in $FOLD_DIR:
 Only the case-ID lists (train_patients.csv / test_patients.csv) ship in git.
 Rebuild the patch manifests losslessly from them plus the archive, once:
 
-  python3 data/download/split_histopath_archive.py \\
-    --archive-path "$DATASET_DIR" \\
-    --output-dir data/splits/histopath_kaggle \\
-    --mode cv --from-patient-manifest
+  PaperB_PathA/scripts/rebuild_patch_manifests.sh
 
-That reads the committed case-ID lists rather than recomputing the split, which
-matters because StratifiedGroupKFold is not stable across scikit-learn versions.
-Afterwards confirm 'git status --short data/splits/histopath_kaggle' is clean:
-any change to patient_stats.csv or split_stats.json means the archive is not the
-published cohort.
+That runs inside the qualified container, because the rebuild imports src.data
+and therefore torchvision, which a bare host interpreter does not have. It
+reads the committed case-ID lists rather than recomputing the split, which
+matters because StratifiedGroupKFold is not stable across scikit-learn
+versions, and it refuses to continue if any tracked split file changes.
 EOF
   exit 1
 fi

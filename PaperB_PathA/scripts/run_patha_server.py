@@ -82,10 +82,8 @@ def verify_patch_manifests(splits_dir: Path, fold: int) -> None:
         raise RuntimeError(
             f"Patch-level manifests missing in {fold_dir}: {', '.join(missing)}.\n"
             "Only the case-ID lists ship in git. Rebuild the patch manifests "
-            "from them plus the archive:\n"
-            "  python3 data/download/split_histopath_archive.py "
-            "--archive-path <archive> --output-dir data/splits/histopath_kaggle "
-            "--mode cv --from-patient-manifest"
+            "from them plus the archive, once:\n"
+            "  PaperB_PathA/scripts/rebuild_patch_manifests.sh"
         )
 
 

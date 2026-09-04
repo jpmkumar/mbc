@@ -97,6 +97,19 @@ first if it is not already present:
 scripts/build_histopath_server_image.sh
 ```
 
+A fresh checkout also needs the patch-level fold manifests rebuilt once. Only
+the case-ID lists ship in git; `train.csv` and `test.csv` are large and
+rebuildable losslessly from them plus the archive:
+
+```bash
+PaperB_PathA/scripts/rebuild_patch_manifests.sh
+```
+
+That runs inside the container (the rebuild imports `src.data`, hence
+torchvision), reads the committed case-ID lists rather than recomputing the
+split, and refuses to continue if any tracked split file changes — a change
+there would mean the archive is not the published cohort.
+
 Then:
 
 ```bash
