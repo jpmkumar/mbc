@@ -116,6 +116,10 @@ papers/paper_b/results/*
 !papers/paper_b/results/export_log.txt
 !papers/paper_b/results/README.md
 papers/paper_b/assets/
+# Local snapshots of superseded manuscript states, kept for comparison only.
+papers/paper_b/archive/
+# Scientific Reports conversion, kept local like the other manuscript trees.
+papers/paper_b/manuscript_sr/
 papers/paper_b/submission/
 papers/paper_b/**/*.docx
 papers/paper_b/**/*.pdf
@@ -152,3 +156,6 @@ paper/*.log
 paper/*.out
 paper/*.pdf
 paper/*.synctex.gz
+
+# PaperB Path A: run artifacts and logs stay local; scripts/README are tracked.
+PaperB_PathA/results/
