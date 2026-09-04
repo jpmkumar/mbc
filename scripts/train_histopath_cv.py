@@ -357,6 +357,21 @@ def _append_experiment_suffix(config: dict, tag: str):
     project["experiment_suffix"] = f"{suffix}_{tag}"
 
 
+def _apply_schedule_overrides(config: dict, args) -> None:
+    """Apply stage-transition overrides and tag the run suffix.
+
+    Both arms of the fair-warmup comparison must be tagged, so a control run
+    and a treatment run cannot land in the same output directory.
+    """
+    if getattr(args, "stage_init_from_best", None) is None:
+        return
+    train_cfg = config.setdefault("training", {})
+    enabled = bool(args.stage_init_from_best)
+    train_cfg["stage_init_from_best"] = enabled
+    _append_experiment_suffix(config, "fairwarm" if enabled else "termwarm")
+    print(f"Stage transition override: stage_init_from_best={enabled}")
+
+
 def _apply_quantum_ablation_overrides(config: dict, args) -> None:
     """Apply CLI expressivity overrides and tag the run suffix."""
     model = config.setdefault("model", {})
@@ -481,6 +496,25 @@ def main():
         help="Override quantum.encoding (angle embedding rotation axis)",
     )
     parser.add_argument(
+        "--stage-init-from-best",
+        dest="stage_init_from_best",
+        action="store_true",
+        default=None,
+        help=(
+            "Start each stage from the best checkpoint of the preceding stage "
+            "(fair-warmup arm; tags the run 'fairwarm')"
+        ),
+    )
+    parser.add_argument(
+        "--no-stage-init-from-best",
+        dest="stage_init_from_best",
+        action="store_false",
+        help=(
+            "Start each stage from the preceding stage's terminal weights, as "
+            "the published runs did (control arm; tags the run 'termwarm')"
+        ),
+    )
+    parser.add_argument(
         "--data-reuploading",
         dest="data_reuploading",
         action="store_true",
@@ -517,6 +551,7 @@ def main():
         config = yaml.safe_load(f)
 
     _apply_quantum_ablation_overrides(config, args)
+    _apply_schedule_overrides(config, args)
     if args.fusion_alpha is not None:
         config.setdefault("model", {}).setdefault("fusion", {})["alpha"] = float(
             args.fusion_alpha

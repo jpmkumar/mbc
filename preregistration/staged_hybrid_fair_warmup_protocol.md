@@ -64,6 +64,39 @@ seed 42 + fold.
 Deviating from any of these makes the rerun non-comparable to the published
 result and voids this protocol.
 
+## Amendment 2026-09-04: execution environment and control arm
+
+Declared before any run with `stage_init_from_best: true`.
+
+This protocol originally assumed Kaggle T4 x2, the environment that produced
+the published five-fold results. The experiment will instead run on the RTX
+A4000 server, which has so far only executed the width matrix. A server
+fair-warmup run compared against Kaggle-published numbers would confound the
+checkpoint-transition change with the change of environment, which the
+server width protocol already refused for the width cells.
+
+The design is therefore paired and within-environment, and the arm labels below
+supersede the single-arm framing:
+
+- **Arm A0 (control).** `--no-stage-init-from-best` on the server. Reproduces
+  the published schedule in the new environment. It is the paired baseline for
+  A1 and, separately, an environment-replication observation against the
+  published Kaggle results.
+- **Arm A1 (treatment).** `--stage-init-from-best` on the server, identical in
+  every other respect.
+
+Only A1 versus A0 supports the hypothesis test. A0 versus the published Kaggle
+runs is reported as a replication observation and is never pooled with either
+arm. If A0 fails to reproduce the published selection outcome, that failure is
+reported and the fair-warmup comparison is interpreted only within the server
+environment.
+
+Measured cost, from `train_time_s` in archived artifacts: 0.99-1.31 h per
+E3-equivalent fold on this server (four server q8 cells), against 3.11-5.16 h
+per fold on Kaggle. Ten cells therefore cost roughly 12 GPU-hours.
+
+Tooling and the full plan live in `PaperB_PathA/`.
+
 ## Budget matching
 
 The published runs gave Stage A 9 to 18 validation evaluations and Stage B 5.
