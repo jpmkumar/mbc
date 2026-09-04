@@ -74,7 +74,23 @@ def case_ids(path: Path) -> set[str]:
     return {str(value) for value in frame[column].unique()}
 
 
+def verify_patch_manifests(splits_dir: Path, fold: int) -> None:
+    """The loader needs patch-level manifests, which are untracked by design."""
+    fold_dir = splits_dir / "folds" / f"fold_{fold}"
+    missing = [name for name in ("train.csv", "test.csv") if not (fold_dir / name).exists()]
+    if missing:
+        raise RuntimeError(
+            f"Patch-level manifests missing in {fold_dir}: {', '.join(missing)}.\n"
+            "Only the case-ID lists ship in git. Rebuild the patch manifests "
+            "from them plus the archive:\n"
+            "  python3 data/download/split_histopath_archive.py "
+            "--archive-path <archive> --output-dir data/splits/histopath_kaggle "
+            "--mode cv --from-patient-manifest"
+        )
+
+
 def verify_fold(splits_dir: Path, fold: int) -> dict[str, int]:
+    verify_patch_manifests(splits_dir, fold)
     fold_dir = splits_dir / "folds" / f"fold_{fold}"
     train = case_ids(fold_dir / "train_patients.csv")
     test = case_ids(fold_dir / "test_patients.csv")

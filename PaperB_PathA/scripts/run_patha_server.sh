@@ -57,6 +57,36 @@ for path in "$DATASET_DIR" "$DATASET_SHA_FILE" "$SPLITS_DIR"; do
   fi
 done
 
+# Patch-level manifests are untracked by design: they are large and rebuildable
+# from the committed case-ID lists. Check before starting the container, so a
+# missing rebuild costs a second rather than a queue slot.
+FOLD_DIR="$SPLITS_DIR/folds/fold_${FOLD}"
+MISSING_MANIFESTS=()
+for name in train.csv test.csv; do
+  [[ -e "$FOLD_DIR/$name" ]] || MISSING_MANIFESTS+=("$name")
+done
+if [[ ${#MISSING_MANIFESTS[@]} -gt 0 ]]; then
+  cat >&2 <<EOF
+Patch-level manifests are missing in $FOLD_DIR:
+  ${MISSING_MANIFESTS[*]}
+
+Only the case-ID lists (train_patients.csv / test_patients.csv) ship in git.
+Rebuild the patch manifests losslessly from them plus the archive, once:
+
+  python3 data/download/split_histopath_archive.py \\
+    --archive-path "$DATASET_DIR" \\
+    --output-dir data/splits/histopath_kaggle \\
+    --mode cv --from-patient-manifest
+
+That reads the committed case-ID lists rather than recomputing the split, which
+matters because StratifiedGroupKFold is not stable across scikit-learn versions.
+Afterwards confirm 'git status --short data/splits/histopath_kaggle' is clean:
+any change to patient_stats.csv or split_stats.json means the archive is not the
+published cohort.
+EOF
+  exit 1
+fi
+
 if find "$CELL_DIR" -name cv_summary.json -print -quit 2>/dev/null | grep -q .; then
   echo "A completed result already exists for fold${FOLD}/${ARM}." >&2
   echo "The declaration forbids silent reruns; move or delete it first." >&2
@@ -94,7 +124,7 @@ docker run --rm \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   --mount type=bind,src="$DATASET_DIR",dst=/datasets/histopath,readonly \
-  --mount type=bind,src="$SPLITS_DIR",dst=/opt/mbc/data/splits/histopath_kaggle,readonly \
+  --mount type=bind,src="$SPLITS_DIR",dst=/opt/mbc/data/splits/histopath_kaggle \
   --mount type=bind,src="$CELL_DIR/results",dst=/opt/mbc/results \
   --mount type=bind,src="$CACHE_DIR",dst=/cache \
   --mount type=bind,src="$BUNDLE_DIR",dst=/outputs \
