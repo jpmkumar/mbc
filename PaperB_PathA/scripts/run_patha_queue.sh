@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Run all ten Path A cells one at a time: five folds x two arms.
 #
-#   run_patha_queue.sh [--dry-run]
+#   run_patha_queue.sh [--dry-run] [--no-container]
+#
+# Runs in the qualified container by default, so each cell records the pinned
+# image, dependency-lock, dataset and split-manifest digests. --no-container
+# falls back to bare Python, which records only the git commit and is not
+# equivalent provenance; use it for debugging, not for reported runs.
 #
 # Arms are interleaved fold by fold so that calendar or thermal drift cannot be
 # confounded with the arm. Stops on the first failure so a partial queue is
@@ -9,11 +14,13 @@
 set -euo pipefail
 
 DRY_RUN=0
+USE_CONTAINER=1
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) echo "Usage: $0 [--dry-run]"; exit 0 ;;
-    *) echo "Usage: $0 [--dry-run]" >&2; exit 2 ;;
+    --no-container) USE_CONTAINER=0 ;;
+    -h|--help) echo "Usage: $0 [--dry-run] [--no-container]"; exit 0 ;;
+    *) echo "Usage: $0 [--dry-run] [--no-container]" >&2; exit 2 ;;
   esac
 done
 
@@ -21,7 +28,16 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 PATHA_DIR="$ROOT/PaperB_PathA"
-LAUNCHER="$PATHA_DIR/scripts/run_patha_fold.sh"
+if [[ "$USE_CONTAINER" == "1" ]]; then
+  LAUNCHER="$PATHA_DIR/scripts/run_patha_server.sh"
+  MODE="container (pinned provenance)"
+  PRIMARY_ROOT="${MBC_PRIMARY_ROOT:-$HOME/mbc-primary}"
+  RESULTS_ROOT="$PRIMARY_ROOT/results/path-a"
+else
+  LAUNCHER="$PATHA_DIR/scripts/run_patha_fold.sh"
+  MODE="bare python (git commit only; NOT reportable provenance)"
+  RESULTS_ROOT="$PATHA_DIR/results"
+fi
 QUEUE_LOG="$PATHA_DIR/results/logs/patha_queue.log"
 mkdir -p "$PATHA_DIR/results/logs"
 
@@ -43,7 +59,7 @@ tag_for_arm() {
 }
 
 is_complete() {
-  local fold="$1" tag="$2" dir="$PATHA_DIR/results/fold${fold}_${tag}"
+  local fold="$1" tag="$2" dir="$RESULTS_ROOT/fold${fold}_${tag}"
   # A cell is complete when its run directory holds a cv_summary.json at any
   # depth. find keeps this portable to bash 3.2, which has no globstar.
   [[ -d "$dir" ]] || return 1
@@ -63,6 +79,8 @@ for cell in "${CELLS[@]}"; do
 done
 
 echo "=== PaperB Path A queue ==="
+echo "  mode     : $MODE"
+echo "  results  : $RESULTS_ROOT"
 echo "  complete : ${#DONE[@]}  ${DONE[*]:-(none)}"
 echo "  pending  : ${#PENDING[@]}"
 for cell in "${PENDING[@]}"; do

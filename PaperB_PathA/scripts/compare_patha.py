@@ -15,11 +15,17 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PATHA = ROOT / "PaperB_PathA" / "results"
 PUBLISHED_GLOB = "results/histopath_kaggle_fold*_e3_v2/**/*progress.json"
+
+# Containerised runs land under the server's primary root; the bare-Python
+# fallback writes inside the repository. Both are searched so the analysis works
+# whichever launcher produced the cells.
+PRIMARY_ROOT = Path(os.environ.get("MBC_PRIMARY_ROOT", Path.home() / "mbc-primary"))
+PATHA_DIRS = [PRIMARY_ROOT / "results" / "path-a", ROOT / "PaperB_PathA" / "results"]
 
 ARMS = {"termwarm": "control (terminal weights)", "fairwarm": "fair (best checkpoint)"}
 
@@ -76,13 +82,17 @@ def collect_patha() -> dict[str, dict[int, dict]]:
     out: dict[str, dict[int, dict]] = {tag: {} for tag in ARMS}
     for tag in ARMS:
         for fold in range(5):
-            hits = sorted(PATHA.glob(f"fold{fold}_{tag}/**/*progress.json"))
-            for h in hits:
-                rec = summarise(h)
-                if rec:
-                    rec["source"] = str(h.relative_to(ROOT))
-                    out[tag][fold] = rec
+            for base in PATHA_DIRS:
+                if fold in out[tag]:
                     break
+                if not base.exists():
+                    continue
+                for hit in sorted(base.glob(f"fold{fold}_{tag}/**/*progress.json")):
+                    rec = summarise(hit)
+                    if rec:
+                        rec["source"] = str(hit)
+                        out[tag][fold] = rec
+                        break
     return out
 
 

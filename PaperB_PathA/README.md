@@ -88,6 +88,17 @@ the comparison.
 
 ## Running it
 
+Runs go through the qualified container by default, so each cell records the
+same provenance the width matrix carries: pinned image id, dependency-lock
+digest, dataset digest, and the five-fold manifest digest. Build the image
+first if it is not already present:
+
+```bash
+scripts/build_histopath_server_image.sh
+```
+
+Then:
+
 ```bash
 # Preview the full queue without launching anything.
 PaperB_PathA/scripts/run_patha_queue.sh --dry-run
@@ -96,14 +107,35 @@ PaperB_PathA/scripts/run_patha_queue.sh --dry-run
 PaperB_PathA/scripts/run_patha_queue.sh
 
 # Or a single cell.
-PaperB_PathA/scripts/run_patha_fold.sh 0 control
+PaperB_PathA/scripts/run_patha_server.sh 0 control
+PaperB_PathA/scripts/run_patha_server.sh 0 fair
+```
+
+The container wrapper refuses to start unless the quantum config, stage caps,
+early-stopping patience, loss/TTA bundle, GPU model, and manifest digest all
+match the declaration, and it refuses to overwrite a completed cell. Artifacts
+land under `$MBC_PRIMARY_ROOT/results/path-a/fold{N}_{tag}/` with the
+provenance JSON in `$MBC_PRIMARY_ROOT/bundles/path-a/`.
+
+The declared five-fold manifest digest is
+`c9be8e181b407822f9fde13d7fb6d3b946775a02548d76ab457a34ac29e6d462`, taken over
+the git-tracked manifest files, so anyone with the repository can reproduce it:
+
+```bash
+python PaperB_PathA/scripts/run_patha_server.py --print-manifest-sha
+```
+
+A bare-Python fallback exists for debugging only. It records the git commit but
+not the image or dataset digests, so it is **not** reportable provenance:
+
+```bash
+PaperB_PathA/scripts/run_patha_queue.sh --no-container
 PaperB_PathA/scripts/run_patha_fold.sh 0 fair
 ```
 
 Runs are tagged `termwarm` (A0) and `fairwarm` (A1) by
 `--no-stage-init-from-best` / `--stage-init-from-best`, so the two arms cannot
-overwrite each other. Artifacts land under `PaperB_PathA/results/`, which is
-gitignored.
+overwrite each other.
 
 ## Analysis
 
