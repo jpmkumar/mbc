@@ -32,8 +32,12 @@ ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = ROOT / "preregistration/staged_hybrid_fair_warmup_protocol.md"
 
 # Digest over the git-tracked five-fold manifest, in sorted path order, hashing
-# "<relative path>\n" then the file bytes. Reproduce with --print-manifest-sha.
-EXPECTED_SPLIT_SHA = "c9be8e181b407822f9fde13d7fb6d3b946775a02548d76ab457a34ac29e6d462"
+# "<relative path>\n" then the file bytes with line endings normalised to LF.
+# Normalisation matters: git stores these blobs with LF, but a checkout under
+# core.autocrlf can materialise CRLF, which would otherwise make the digest
+# depend on the client platform rather than on the partition.
+# Reproduce with --print-manifest-sha.
+EXPECTED_SPLIT_SHA = "4a0a72fa3c89250cd012b943374be2301c0eb8ea2f4dd7d968b66c04b76bdf83"
 MANIFEST_PREFIX = "data/splits/histopath_kaggle"
 EXPECTED_GPU = "NVIDIA RTX A4000"
 EXPECTED_CASE_IDS = 279
@@ -55,9 +59,10 @@ def manifest_sha(splits_dir: Path) -> str:
     for path in members:
         if not path.exists():
             raise RuntimeError(f"Manifest member missing: {path}")
+        data = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
         digest.update(f"{MANIFEST_PREFIX}/{path.relative_to(splits_dir)}".encode())
         digest.update(b"\n")
-        digest.update(path.read_bytes())
+        digest.update(data)
     return digest.hexdigest()
 
 

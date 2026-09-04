@@ -118,7 +118,7 @@ land under `$MBC_PRIMARY_ROOT/results/path-a/fold{N}_{tag}/` with the
 provenance JSON in `$MBC_PRIMARY_ROOT/bundles/path-a/`.
 
 The declared five-fold manifest digest is
-`c9be8e181b407822f9fde13d7fb6d3b946775a02548d76ab457a34ac29e6d462`, taken over
+`4a0a72fa3c89250cd012b943374be2301c0eb8ea2f4dd7d968b66c04b76bdf83`, taken over
 the git-tracked manifest files, so anyone with the repository can reproduce it:
 
 ```bash
