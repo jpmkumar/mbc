@@ -23,9 +23,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pandas as pd
-import torch
-import yaml
+# pandas, torch and yaml are imported lazily inside the functions that need
+# them, so --print-manifest-sha runs on a bare host with only the standard
+# library. The digest is the auditable part and must be reproducible by anyone
+# holding the repository, not only inside the container.
 
 ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = ROOT / "preregistration/staged_hybrid_fair_warmup_protocol.md"
@@ -61,6 +62,8 @@ def manifest_sha(splits_dir: Path) -> str:
 
 
 def case_ids(path: Path) -> set[str]:
+    import pandas as pd
+
     frame = pd.read_csv(path)
     column = "patient_id" if "patient_id" in frame.columns else frame.columns[0]
     return {str(value) for value in frame[column].unique()}
@@ -79,6 +82,9 @@ def verify_fold(splits_dir: Path, fold: int) -> dict[str, int]:
 
 
 def verify_config(expect_fair: bool) -> None:
+    import torch
+    import yaml
+
     config = yaml.safe_load((ROOT / "configs/histopath.yaml").read_text())
     quantum = config["model"]["quantum"]
     expected = {
@@ -134,6 +140,8 @@ def nvidia_smi_metadata() -> list[dict[str, str]]:
 
 
 def capture_provenance(fold: int, arm: str, splits_dir: Path) -> dict:
+    import torch
+
     environment = required_environment()
     commit = environment["MBC_GIT_COMMIT"]
     if len(commit) != 40:
