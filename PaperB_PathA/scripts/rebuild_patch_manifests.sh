@@ -62,20 +62,75 @@ docker run --rm \
 
 echo
 echo "=== Verifying the partition was not altered ==="
-# The rebuild also rewrites patient_stats.csv and split_stats.json. Any change
-# to those tracked files means the archive is not the published cohort, so the
-# comparison against the published results would be invalid.
-if [[ -n "$(git status --porcelain data/splits/histopath_kaggle)" ]]; then
-  echo "REFUSING TO CONTINUE: tracked split files changed." >&2
-  git status --short data/splits/histopath_kaggle >&2
-  echo >&2
-  echo "The archive is not the published cohort. Do not run Path A against it." >&2
-  exit 1
-fi
-echo "  tracked split files unchanged (archive matches the published cohort)"
+# The rebuild rewrites patient_stats.csv and split_stats.json as well as the
+# patch manifests. patient_stats.csv is the per-case fingerprint and must be
+# byte-identical. split_stats.json is allowed to differ in archive_path alone,
+# which records wherever the archive was mounted and is not cohort-defining.
+python3 - <<'PY' || exit 1
+import json
+import subprocess
+import sys
+
+PREFIX = "data/splits/histopath_kaggle"
+IGNORED = {"archive_path"}
+
+
+def committed(path):
+    return subprocess.check_output(["git", "show", f"HEAD:{path}"])
+
+
+changed = subprocess.check_output(
+    ["git", "status", "--porcelain", PREFIX], text=True
+).splitlines()
+tracked_changed = [line[3:].strip() for line in changed if line[:2].strip() in {"M", "MM"}]
+
+if not tracked_changed:
+    print("  tracked split files unchanged")
+    sys.exit(0)
+
+fatal = []
+for rel in tracked_changed:
+    if rel.endswith("split_stats.json"):
+        before = json.loads(committed(rel))
+        after = json.loads(open(rel, "rb").read())
+        diff = {
+            key
+            for key in set(before) | set(after)
+            if before.get(key) != after.get(key)
+        } - IGNORED
+        if diff:
+            fatal.append(f"{rel}: cohort fields differ {sorted(diff)}")
+        else:
+            print(f"  {rel}: only archive_path differs (expected, not cohort-defining)")
+            print(f"      committed {before.get('archive_path')!r} -> now {after.get('archive_path')!r}")
+    else:
+        fatal.append(f"{rel}: tracked partition file changed")
+
+if fatal:
+    print("REFUSING TO CONTINUE:", file=sys.stderr)
+    for item in fatal:
+        print(f"  {item}", file=sys.stderr)
+    print(
+        "\nThe archive is not the published cohort. Do not run Path A against it.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
 
 DIGEST="$(python3 PaperB_PathA/scripts/run_patha_server.py --print-manifest-sha)"
-echo "  manifest digest: $DIGEST"
+EXPECTED="091fe005155a88a5397afb5d6d381d397cf3c4da00d6f7efc5a0a487fab1963e"
+if [[ "$DIGEST" != "$EXPECTED" ]]; then
+  echo "REFUSING TO CONTINUE: partition digest changed." >&2
+  echo "  observed $DIGEST" >&2
+  echo "  expected $EXPECTED" >&2
+  exit 1
+fi
+echo "  partition digest matches: $DIGEST"
+
+echo
+echo "To restore the committed archive_path in split_stats.json (optional, keeps"
+echo "the tracked tree clean for the image builder):"
+echo "  git checkout -- data/splits/histopath_kaggle/split_stats.json"
 
 echo
 echo "Rebuilt. Patch manifests present for:"

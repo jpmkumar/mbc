@@ -131,7 +131,7 @@ land under `$MBC_PRIMARY_ROOT/results/path-a/fold{N}_{tag}/` with the
 provenance JSON in `$MBC_PRIMARY_ROOT/bundles/path-a/`.
 
 The declared five-fold manifest digest is
-`4a0a72fa3c89250cd012b943374be2301c0eb8ea2f4dd7d968b66c04b76bdf83`, taken over
+`091fe005155a88a5397afb5d6d381d397cf3c4da00d6f7efc5a0a487fab1963e`, taken over
 the git-tracked manifest files, so anyone with the repository can reproduce it:
 
 ```bash

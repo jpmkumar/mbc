@@ -31,13 +31,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = ROOT / "preregistration/staged_hybrid_fair_warmup_protocol.md"
 
-# Digest over the git-tracked five-fold manifest, in sorted path order, hashing
-# "<relative path>\n" then the file bytes with line endings normalised to LF.
-# Normalisation matters: git stores these blobs with LF, but a checkout under
-# core.autocrlf can materialise CRLF, which would otherwise make the digest
-# depend on the client platform rather than on the partition.
+# Digest over the authoritative partition definition: the ten case-ID lists and
+# patient_stats.csv, in sorted path order, hashing "<relative path>\n" then the
+# file bytes with line endings normalised to LF.
+#
+# Two deliberate exclusions and normalisations, both learned the hard way:
+#   - split_stats.json is omitted. It is derived, and its archive_path field
+#     records wherever the archive happened to be mounted, so including it made
+#     the digest depend on the machine rather than on the partition.
+#   - line endings are normalised, because git stores these blobs with LF while
+#     a checkout under core.autocrlf can materialise CRLF.
 # Reproduce with --print-manifest-sha.
-EXPECTED_SPLIT_SHA = "4a0a72fa3c89250cd012b943374be2301c0eb8ea2f4dd7d968b66c04b76bdf83"
+EXPECTED_SPLIT_SHA = "091fe005155a88a5397afb5d6d381d397cf3c4da00d6f7efc5a0a487fab1963e"
+
+# Cohort-defining fields of split_stats.json, checked structurally instead.
+EXPECTED_COHORT = {
+    "mode": "cv",
+    "seed": 42,
+    "ratio_bins": 4,
+    "total_patients": 279,
+    "total_patches": 277524,
+    "n_folds": 5,
+}
 MANIFEST_PREFIX = "data/splits/histopath_kaggle"
 EXPECTED_GPU = "NVIDIA RTX A4000"
 EXPECTED_CASE_IDS = 279
@@ -48,7 +63,7 @@ ARMS = {"control": "termwarm", "fair": "fairwarm"}
 def manifest_sha(splits_dir: Path) -> str:
     """Digest the five-fold manifest exactly as EXPECTED_SPLIT_SHA was built."""
     members = sorted(
-        [splits_dir / "patient_stats.csv", splits_dir / "split_stats.json"]
+        [splits_dir / "patient_stats.csv"]
         + [
             splits_dir / "folds" / f"fold_{fold}" / name
             for fold in range(5)
@@ -72,6 +87,28 @@ def case_ids(path: Path) -> set[str]:
     frame = pd.read_csv(path)
     column = "patient_id" if "patient_id" in frame.columns else frame.columns[0]
     return {str(value) for value in frame[column].unique()}
+
+
+def verify_cohort(splits_dir: Path) -> dict:
+    """Check the cohort-defining fields of split_stats.json.
+
+    archive_path is deliberately ignored: it records the mount point of the
+    archive, which differs between a laptop and a container.
+    """
+    import json as _json
+
+    stats = _json.loads((splits_dir / "split_stats.json").read_text())
+    observed = {key: stats.get(key) for key in EXPECTED_COHORT}
+    if observed != EXPECTED_COHORT:
+        raise RuntimeError(
+            "split_stats.json does not describe the published cohort:\n"
+            f"  observed {observed}\n  expected {EXPECTED_COHORT}"
+        )
+    return {
+        "test_idc_ratio_mean": stats.get("test_idc_ratio_mean"),
+        "test_idc_ratio_std": stats.get("test_idc_ratio_std"),
+        "archive_path_recorded": stats.get("archive_path"),
+    }
 
 
 def verify_patch_manifests(splits_dir: Path, fold: int) -> None:
@@ -262,9 +299,11 @@ def main() -> None:
         raise RuntimeError("The fair-warmup declaration is missing.")
 
     verify_config(expect_fair=args.arm == "fair")
+    cohort = verify_cohort(splits_dir)
     fold_counts = verify_fold(splits_dir, args.fold)
     provenance = capture_provenance(args.fold, args.arm, splits_dir)
     provenance["outer_case_id_counts"] = fold_counts
+    provenance["cohort"] = cohort
 
     if args.output_root is not None:
         args.output_root.mkdir(parents=True, exist_ok=True)
