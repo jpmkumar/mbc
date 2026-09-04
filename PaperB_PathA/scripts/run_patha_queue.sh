@@ -38,8 +38,30 @@ else
   MODE="bare python (git commit only; NOT reportable provenance)"
   RESULTS_ROOT="$PATHA_DIR/results"
 fi
-QUEUE_LOG="$PATHA_DIR/results/logs/patha_queue.log"
-mkdir -p "$PATHA_DIR/results/logs"
+PRIMARY_ROOT="${MBC_PRIMARY_ROOT:-$HOME/mbc-primary}"
+QUEUE_LOG="$PRIMARY_ROOT/logs/path_a_queue.log"
+LOCK_FILE="$PRIMARY_ROOT/logs/path_a_queue.lock"
+NTFY_TOPIC_FILE="${MBC_NTFY_TOPIC_FILE:-$HOME/.config/mbc/ntfy_topic}"
+mkdir -p "$PRIMARY_ROOT/logs" "$PATHA_DIR/results/logs"
+
+# Same ntfy contract as the width queue: silently no-op when no topic is
+# configured, never fail the run because a notification failed.
+notify() {
+  local title="$1" body="$2" priority="${3:-default}"
+  [[ -s "$NTFY_TOPIC_FILE" ]] || return 0
+  local topic
+  topic="$(tr -d '[:space:]' < "$NTFY_TOPIC_FILE")"
+  [[ -n "$topic" ]] || return 0
+  curl -fsS \
+    -H "Title: $title" \
+    -H "Priority: $priority" \
+    -d "$body" \
+    "https://ntfy.sh/${topic}" >/dev/null 2>&1 || true
+}
+
+log() {
+  printf '%s %s\n' "$(date -Iseconds)" "$*" | tee -a "$QUEUE_LOG"
+}
 
 # Control before fair within each fold, so the paired baseline always exists
 # first if the queue is interrupted.
@@ -98,20 +120,52 @@ fi
 
 if [[ ${#PENDING[@]} -eq 0 ]]; then
   echo "Nothing to do. Analyse with:"
-  echo "  python PaperB_PathA/scripts/compare_patha.py"
+  echo "  python3 PaperB_PathA/scripts/compare_patha.py"
   exit 0
 fi
 
+# One queue at a time. A second launch would contend for the single GPU.
+if [[ -e "$LOCK_FILE" ]] && kill -0 "$(cat "$LOCK_FILE" 2>/dev/null)" 2>/dev/null; then
+  echo "A Path A queue is already running (pid $(cat "$LOCK_FILE"))." >&2
+  echo "Remove $LOCK_FILE only if that process is gone." >&2
+  exit 1
+fi
+echo "$$" > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+
+TOTAL="${#PENDING[@]}"
+STARTED_AT="$(date -Iseconds)"
+log "queue start: $TOTAL cells pending, mode=$MODE"
+notify "Path A started" "$TOTAL cells pending on $(hostname -s). Estimated $(awk -v n="$TOTAL" 'BEGIN{printf "%.1f", n*1.15}') h."
+
+INDEX=0
 for cell in "${PENDING[@]}"; do
   read -r fold arm <<< "$cell"
-  echo "--- starting fold${fold} / ${arm} at $(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$QUEUE_LOG"
+  INDEX=$((INDEX + 1))
+  CELL_START=$(date +%s)
+  log "[$INDEX/$TOTAL] starting fold${fold}/${arm}"
+
   if ! "$LAUNCHER" "$fold" "$arm"; then
-    echo "FAILED fold${fold} / ${arm} — queue stopped" | tee -a "$QUEUE_LOG" >&2
+    log "[$INDEX/$TOTAL] FAILED fold${fold}/${arm} — queue stopped"
+    notify "Path A FAILED" \
+      "fold${fold}/${arm} failed after $((INDEX - 1))/$TOTAL completed. Queue stopped. Log: $QUEUE_LOG" \
+      "high"
     exit 1
   fi
-  echo "--- finished fold${fold} / ${arm} at $(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$QUEUE_LOG"
+
+  ELAPSED=$(( ($(date +%s) - CELL_START) / 60 ))
+  log "[$INDEX/$TOTAL] finished fold${fold}/${arm} in ${ELAPSED} min"
+  notify "Path A $INDEX/$TOTAL" "fold${fold}/${arm} done in ${ELAPSED} min."
 done
 
+log "queue complete: $TOTAL cells since $STARTED_AT"
+
+# Put the actual verdict in the final notification, not just "done".
+VERDICT="$(python3 "$PATHA_DIR/scripts/compare_patha.py" --summary 2>/dev/null || echo "run compare_patha.py for the verdict")"
+log "verdict: $VERDICT"
+notify "Path A complete" "$VERDICT" "high"
+
 echo
-echo "Queue complete. Analyse with:"
-echo "  python PaperB_PathA/scripts/compare_patha.py"
+echo "Queue complete. Verdict: $VERDICT"
+echo "Full analysis:"
+echo "  python3 PaperB_PathA/scripts/compare_patha.py"

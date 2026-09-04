@@ -132,13 +132,40 @@ def print_arm(title: str, recs: dict[int, dict]) -> None:
           + (f"  -> {sorted(quantum)}" if quantum else ""))
 
 
+def summary_line(patha: dict[str, dict[int, dict]]) -> str:
+    """One-line verdict, short enough for a push notification."""
+    ctrl, fair = patha["termwarm"], patha["fairwarm"]
+    parts = [
+        f"A0 {len(ctrl)}/5 folds",
+        f"A1 {len(fair)}/5 folds",
+    ]
+    fair_quantum = sorted(
+        f for f, r in fair.items() if r["selected_stage"] not in (None, "stage_a")
+    )
+    paired = sorted(set(ctrl) & set(fair))
+    if len(paired) < 5:
+        parts.append(f"incomplete ({len(paired)}/5 paired)")
+    elif fair_quantum:
+        parts.append(f"QUANTUM SELECTED in folds {fair_quantum} under fair warmup")
+        parts.append("central claim needs rewriting")
+    else:
+        parts.append("Stage A wins 5/5 under fair warmup")
+        parts.append("published conclusion strengthened")
+    return " | ".join(parts)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="emit machine-readable output")
+    ap.add_argument("--summary", action="store_true", help="one-line verdict only")
     args = ap.parse_args()
 
     patha = collect_patha()
     published = collect_published()
+
+    if args.summary:
+        print(summary_line(patha))
+        return
 
     if args.json:
         print(json.dumps({"path_a": patha, "published_kaggle": published}, indent=2))
