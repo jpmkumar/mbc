@@ -1,0 +1,76 @@
+# BreakHis Paper D training config (matched to Paper B circuit / E2b head)
+
+project:
+  name: "BreakHis Paper D transfer"
+  seed: 42
+
+data:
+  # Parent of BreaKHis_v1/; manifests store paths relative to this root.
+  root: "papers/paper_d/data"
+  extracted_dirname: "BreaKHis_v1"
+  splits_dir: "data/splits/breakhis"
+  image_size: 224
+  num_workers: 4
+  modalities:
+    - histopath
+  preprocessing:
+    enabled: true
+    histopath:
+      grayscale: false
+      clahe: false
+  augmentation:
+    strong: true
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.1
+    hue: 0.05
+  # Fraction of outer-train cases held out for validation (case-level).
+  val_case_ratio: 0.15
+
+model:
+  encoder: "efficientnet_b0"
+  encoder_dim: 1280
+  projection_dim: 2048
+  transformer:
+    num_layers: 2
+    num_heads: 4
+  compression_dims: [128, 32, 8]
+  num_modality_tokens: 1
+  num_classes: 2
+  classical_head_hidden: 8
+  quantum:
+    n_qubits: 8
+    n_layers: 2
+    entanglement: "linear"
+    encoding: "angle_y"
+    data_reuploading: false
+    feature_norm: true
+    full_readout: true
+    backend: "default.qubit"
+    diff_method: "backprop"
+
+training:
+  batch_size: 32
+  channels_last: true
+  # Matched budget across all four arms (epochs of the active head path).
+  epochs: 25
+  early_stopping_patience: 5
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  grad_clip_norm: 1.0
+  loss: focal
+  focal_gamma: 2.0
+  use_class_weights: true
+  # Selection on validation case-balanced AUPRC (Paper D primary metric).
+  selection_metric: case_balanced_auprc
+  tune_threshold: true
+  threshold_metric: fbeta
+  fbeta_beta: 1.5
+  eval_threshold: 0.5
+  tta: true
+  # Frozen: encoder fully frozen. Finetune: only last EfficientNet block.
+  finetune_last_blocks: 1
+
+paths:
+  results: "results/breakhis_paper_d"
+  checkpoints: "results/breakhis_paper_d/checkpoints"

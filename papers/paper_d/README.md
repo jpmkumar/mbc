@@ -27,7 +27,12 @@ bake-off; the estimand is domain shift with the same circuit family as Paper B.
 | [`README.md`](README.md) | yes | This index |
 | [`CODE_AVAILABILITY.md`](CODE_AVAILABILITY.md) | yes | Citation paths for the manuscript |
 | [`PLAN.md`](PLAN.md) | yes | Phased execution gates |
+| [`SERVER_PAPER_D.md`](SERVER_PAPER_D.md) | yes | RTX A4000 / GPU server runbook |
 | [`config/circuit_registry.json`](config/circuit_registry.json) | yes | Paper-B–matched VQC / MLP specs |
+| [`config/breakhis.yaml`](config/breakhis.yaml) | yes | Training hyperparams for F/T × heads |
+| [`scripts/prepare_breakhis_manifests.py`](scripts/prepare_breakhis_manifests.py) | yes | Per-fold image manifests |
+| [`scripts/train_breakhis_cv.py`](scripts/train_breakhis_cv.py) | yes | F-MLP / F-VQC / T-MLP / T-VQC runner |
+| [`scripts/run_breakhis_queue.sh`](scripts/run_breakhis_queue.sh) | yes | Full matrix queue |
 | [`scripts/write_paperd_lock.py`](scripts/write_paperd_lock.py) | yes | Stage-2 lock manifest writer |
 | [`scripts/verify_paperd_lock.py`](scripts/verify_paperd_lock.py) | yes | Recompute digests before labelled runs |
 | [`results/README.md`](results/README.md) | yes | What may be promoted from raw runs |
@@ -52,12 +57,22 @@ bake-off; the estimand is domain shift with the same circuit family as Paper B.
 ## Commands
 
 ```bash
-# After case-ID manifests exist under data/splits/breakhis/
-python papers/paper_d/scripts/write_paperd_lock.py
+# Verify confirmatory lock (required before labelled runs)
+python3 papers/paper_d/scripts/verify_paperd_lock.py
 
-# Before the first labelled comparative run
-python papers/paper_d/scripts/verify_paperd_lock.py
+# Extract archive once (local; gitignored)
+tar -xzf papers/paper_d/data/BreaKHis_v1.tar.gz -C papers/paper_d/data
+
+# One fold / one arm
+.venv/bin/python papers/paper_d/scripts/prepare_breakhis_manifests.py --fold 0
+.venv/bin/python papers/paper_d/scripts/train_breakhis_cv.py --fold 0 --arm F-MLP
+
+# Full matrix (5 folds × F-MLP F-VQC T-MLP T-VQC). Prefer CUDA.
+papers/paper_d/scripts/run_breakhis_queue.sh
+papers/paper_d/scripts/run_breakhis_queue.sh --dry-run
 ```
+
+Artifacts: `results/breakhis_paper_d/fold{N}_{arm}/` (gitignored).
 
 ## Relation to other papers
 

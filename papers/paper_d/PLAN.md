@@ -40,7 +40,14 @@ scores inspected.
 
 ## Phase 2 — confirmatory cells
 
-Run all four arms on every committed fold:
+Extract slides (local):
+
+```bash
+tar -xzf papers/paper_d/data/BreaKHis_v1.tar.gz -C papers/paper_d/data
+```
+
+Run all four arms on every committed fold via
+`papers/paper_d/scripts/run_breakhis_queue.sh`:
 
 | ID | Regime | Head |
 |----|--------|------|
@@ -50,7 +57,7 @@ Run all four arms on every committed fold:
 | T-VQC | Last-block fine-tune | Paper-B VQC |
 
 Promote only curated summaries into `papers/paper_d/results/` (selective track,
-same pattern as Paper B/C). Raw logs stay in root `results/`.
+same pattern as Paper B/C). Raw logs stay in root `results/breakhis_paper_d/`.
 
 ## Phase 3 — analysis and manuscript
 

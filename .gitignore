@@ -181,3 +181,6 @@ paper/*.synctex.gz
 
 # PaperB Path A: run artifacts and logs stay local; scripts/README are tracked.
 PaperB_PathA/results/
+# Paper D BreakHis training outputs and rebuildable runtime manifests.
+results/breakhis_paper_d/
+data/splits/breakhis/runtime/

@@ -1,15 +1,15 @@
 {
   "paper": "D",
-  "created_utc": "2026-09-16T07:21:11Z",
-  "stage1_commit": "5caa29c109b0c1811469fe5b140734a728807376",
+  "created_utc": "2026-09-16T09:03:26Z",
+  "stage1_commit": "d5a0086340551b6be3a3d023965904fc41a46360",
   "protocol_path": "preregistration/paper_d_breakhis_protocol.md",
   "protocol_sha256": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
   "tracked_file_sha256": {
     "preregistration/paper_d_breakhis_protocol.md": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
     "papers/paper_d/config/circuit_registry.json": "85ed96048a4ce35aed0691adf441093e7272c3b168e2ad3d3a322189bd76fe14",
-    "papers/paper_d/README.md": "a29e1f132369ead09f185167bec355fc5798fb47abf2a3004d46b174eea9cea6",
+    "papers/paper_d/README.md": "30e1678a458eb0b19663728f622793d9983a6340f7355d3fd8399b978d1725c1",
     "papers/paper_d/CODE_AVAILABILITY.md": "fde8958463ce8f201d1b799bc27a21a8975254ab011f382a3ce6d69769ffe928",
-    "papers/paper_d/PLAN.md": "c6d59490638690290de857c3e73cf0307e62424dc522e13f0f096929b913f66b",
+    "papers/paper_d/PLAN.md": "481f6ad51905224a8b69ad44616856faa17dd16c01042db22a5cd9515e47927b",
     "data/splits/breakhis/README.md": "32409cd542ad46ad8ae7b4f4b8661c0d6883e7ceaccf35f62bc8c8d75cc49d7b"
   },
   "split_artifact_sha256": {
