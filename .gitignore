@@ -15,6 +15,11 @@ data/splits/histopath_kaggle/runtime/
 # versions, so folds must be loaded rather than regenerated.
 !data/splits/histopath/folds/**/*_patients.csv
 !data/splits/histopath_kaggle/folds/**/*_patients.csv
+# Paper D BreakHis: track case-level lists and stats; ignore rebuildable bulk.
+data/splits/breakhis/**/*.csv
+!data/splits/breakhis/**/*_cases.csv
+!data/splits/breakhis/**/*_patients.csv
+!data/splits/breakhis/split_stats.json
 
 # Python
 __pycache__/
@@ -147,6 +152,19 @@ papers/paper_c/manuscript/*.blg
 papers/paper_c/manuscript/*.log
 papers/paper_c/manuscript/*.out
 papers/paper_c/manuscript/*.synctex.gz
+papers/paper_d/results/
+!papers/paper_d/results/
+papers/paper_d/results/*
+!papers/paper_d/results/README.md
+papers/paper_d/assets/
+papers/paper_d/**/*.docx
+papers/paper_d/**/*.pdf
+papers/paper_d/manuscript/*.aux
+papers/paper_d/manuscript/*.bbl
+papers/paper_d/manuscript/*.blg
+papers/paper_d/manuscript/*.log
+papers/paper_d/manuscript/*.out
+papers/paper_d/manuscript/*.synctex.gz
 
 # LaTeX build
 paper/*.aux

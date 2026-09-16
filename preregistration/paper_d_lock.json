@@ -1,0 +1,21 @@
+{
+  "paper": "D",
+  "created_utc": "2026-09-16T06:23:00Z",
+  "stage1_commit": "74592d6c751c05b5c8b11004eb3dc66a03bcb9a5",
+  "protocol_path": "preregistration/paper_d_breakhis_protocol.md",
+  "protocol_sha256": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
+  "tracked_file_sha256": {
+    "preregistration/paper_d_breakhis_protocol.md": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
+    "papers/paper_d/config/circuit_registry.json": "85ed96048a4ce35aed0691adf441093e7272c3b168e2ad3d3a322189bd76fe14",
+    "papers/paper_d/README.md": "c2b2e50ab451a151a8c3f30a0359f91c6f99fb4ce4478c5272f5170da8212daf",
+    "papers/paper_d/CODE_AVAILABILITY.md": "fde8958463ce8f201d1b799bc27a21a8975254ab011f382a3ce6d69769ffe928",
+    "papers/paper_d/PLAN.md": "c6d59490638690290de857c3e73cf0307e62424dc522e13f0f096929b913f66b",
+    "data/splits/breakhis/README.md": "e9f07722c1984720bc656cd2c37cf7d889ffb7aca75bb4ef9c888c691140b54f"
+  },
+  "split_artifact_sha256": {},
+  "breakhis_archive_sha256": null,
+  "container_image_digest": null,
+  "dependency_lock_sha256": null,
+  "partial_lock": true,
+  "notes": "partial Phase-0 stub; re-run without --allow-empty-splits after case lists and archive digest are available"
+}

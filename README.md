@@ -38,6 +38,14 @@ validation and does not surpass its classical control.
 
 - Code index: [`papers/paper_a/`](papers/paper_a/)
 
+## Paper D — BreakHis transfer (immediate QML follow-on after B)
+
+Locked 2026-09-16. Same VQC family as Paper B; estimand is magnification/stain
+shift under case-ID CV. "No gain under shift" is a pre-allowed outcome.
+
+- Protocol: [`preregistration/paper_d_breakhis_protocol.md`](preregistration/paper_d_breakhis_protocol.md)
+- Workspace: [`papers/paper_d/`](papers/paper_d/)
+
 ## Quick Start
 
 ```bash
@@ -74,6 +82,7 @@ scripts/              Training, evaluation, and analysis entry points
 |----------|---------|----------------|
 | Mammography | [CBIS-DDSM](https://doi.org/10.7937/K9/TCIA.2016.7O02S9CY) | **Real (~2966 ROIs)** |
 | Histopathology | Kaggle Breast Histopathology (IDC patches) | **Scripts + 5-fold CV** — [`KAGGLE_HISTOPATH.md`](KAGGLE_HISTOPATH.md) |
+| Histopathology | BreakHis (multi-mag) | **Paper D** — protocol + workspace; splits pending — [`papers/paper_d/`](papers/paper_d/) |
 | Ultrasound | [BUSI](https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset) | Synthetic placeholder |
 | Thermography | Kaggle thermo DB | Synthetic placeholder |
 

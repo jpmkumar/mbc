@@ -58,6 +58,7 @@ so do not rely on them to reproduce a partition — use the manifests.
 |-----------|-------------------|
 | `histopath_kaggle/` | All reported five-fold results: E2, E2b, E3, E4, the Stage-B frozen-head analysis, and the Kaggle width cells |
 | `histopath/` | The twelve-cell RTX A4000 width matrix only |
+| `breakhis/` | **Paper D** — BreakHis case-ID folds (freeze before labelled transfer runs) |
 
 Both hold 279 public case identifiers and 277,524 patches with seed 42 and four
 ratio bins; they differ only in the case-ID-to-fold assignment. Absolute metrics from the two

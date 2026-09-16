@@ -1,0 +1,29 @@
+{
+  "paper": "D",
+  "description": "Paper-B-matched circuit and classical control for BreakHis transfer",
+  "locked_with_protocol": "preregistration/paper_d_breakhis_protocol.md",
+  "backbone": {
+    "name": "EfficientNet-B0",
+    "compression_dim": 8,
+    "notes": "Same classical front-end family as Paper B histopath stack"
+  },
+  "vqc": {
+    "n_qubits": 8,
+    "n_layers": 2,
+    "encoding": "angle_y",
+    "entanglement": "linear",
+    "data_reuploading": false,
+    "full_readout": true,
+    "device": "default.qubit",
+    "diff_method": "backprop"
+  },
+  "matched_mlp": {
+    "role": "E2b-style capacity-matched classical head on the same 8-D embedding",
+    "input_dim": 8,
+    "notes": "Parameter count must be >= paired VQC; exact module registered at training-script freeze"
+  },
+  "regimes": ["frozen_backbone", "last_block_finetune"],
+  "primary_metric": "case_balanced_auprc",
+  "smallest_effect_of_interest": 0.01,
+  "seed_base": 42
+}
