@@ -195,12 +195,19 @@ def train_one_arm(config: dict, arm: str, fold: int, quick: bool = False) -> dic
     )
 
     model = build_model(config, spec["head"])
+    quantum_device = "cpu" if spec["head"] == "vqc" else device
+    # Match HybridTrainer: place classical on GPU and VQC head on CPU via
+    # set_devices. Do NOT call model.to(cuda) afterwards — that would move the
+    # VQC LayerNorm to CUDA while forward still feeds CPU features.
     if hasattr(model, "set_devices"):
         model.set_devices(
             classical_device=device,
-            quantum_device="cpu" if spec["head"] == "vqc" else device,
+            quantum_device=quantum_device,
         )
-    model = model.to(device)
+        print(f"devices: classical={device} quantum={quantum_device}")
+    else:
+        model = model.to(device)
+
     apply_regime(
         model,
         spec["regime"],
@@ -208,8 +215,12 @@ def train_one_arm(config: dict, arm: str, fold: int, quick: bool = False) -> dic
     )
 
     if train_cfg.get("channels_last", True) and device == "cuda":
-        model = model.to(memory_format=torch.channels_last)
+        model.encoder.to(memory_format=torch.channels_last)
+        if hasattr(model, "set_devices"):
+            model.set_devices(device, quantum_device)
 
+    # AMP is unsafe across the CPU VQC boundary; keep it for MLP-only arms.
+    use_amp = device == "cuda" and spec["head"] == "mlp"
     criterion = build_criterion(train_cfg, loaders["train"], device)
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(
@@ -217,7 +228,7 @@ def train_one_arm(config: dict, arm: str, fold: int, quick: bool = False) -> dic
         lr=float(train_cfg["lr"]),
         weight_decay=float(train_cfg.get("weight_decay", 1e-4)),
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
     epochs = 2 if quick else int(train_cfg["epochs"])
     patience = int(train_cfg.get("early_stopping_patience", 5))
     clip = float(train_cfg.get("grad_clip_norm", 1.0))
@@ -249,7 +260,7 @@ def train_one_arm(config: dict, arm: str, fold: int, quick: bool = False) -> dic
             labels = batch["label"].to(device, non_blocking=True)
             modality_ids = batch["modality_id"].to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
-            with torch.autocast(device_type="cuda", enabled=(device == "cuda")):
+            with torch.autocast(device_type="cuda", enabled=use_amp):
                 logits = model(images, modality_ids)
                 loss = criterion(logits, labels)
             scaler.scale(loss).backward()
@@ -301,8 +312,10 @@ def train_one_arm(config: dict, arm: str, fold: int, quick: bool = False) -> dic
                 break
 
     # Load best and score test
-    ckpt = torch.load(best_path, map_location=device, weights_only=False)
+    ckpt = torch.load(best_path, map_location="cpu", weights_only=False)
     model.load_state_dict(ckpt["model"])
+    if hasattr(model, "set_devices"):
+        model.set_devices(device, quantum_device)
     if spec["head"] == "vqc":
         model.set_training_stage("stage_b")
 
