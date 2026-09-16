@@ -1,7 +1,7 @@
 {
   "paper": "D",
-  "created_utc": "2026-09-16T09:03:26Z",
-  "stage1_commit": "d5a0086340551b6be3a3d023965904fc41a46360",
+  "created_utc": "2026-09-16T09:57:10Z",
+  "stage1_commit": "079c43f301a4bfa9ac1081c46ad462a837b7d228",
   "protocol_path": "preregistration/paper_d_breakhis_protocol.md",
   "protocol_sha256": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
   "tracked_file_sha256": {
