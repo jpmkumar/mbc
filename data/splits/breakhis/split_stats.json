@@ -1,0 +1,58 @@
+{
+  "archive": "papers/paper_d/data/BreaKHis_v1.tar.gz",
+  "archive_sha256": "d118014cf8a58f6d1fc4571e55efb523c932c85cfba2fb05627e455fc40bd640",
+  "n_images": 7909,
+  "n_cases": 82,
+  "images_by_label": {
+    "malignant": 5429,
+    "benign": 2480
+  },
+  "images_by_magnification": {
+    "100X": 2081,
+    "200X": 2013,
+    "400X": 1820,
+    "40X": 1995
+  },
+  "n_splits": 5,
+  "seed": 42,
+  "sklearn_splitter": "StratifiedGroupKFold",
+  "group_unit": "case_id",
+  "folds": [
+    {
+      "fold": 0,
+      "n_test_cases": 17,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1799
+    },
+    {
+      "fold": 1,
+      "n_test_cases": 17,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1631
+    },
+    {
+      "fold": 2,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 11,
+      "n_test_images": 1454
+    },
+    {
+      "fold": 3,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 11,
+      "n_test_images": 1528
+    },
+    {
+      "fold": 4,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 4,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1497
+    }
+  ],
+  "case_lists_glob": "data/splits/breakhis/fold_*/{train,test}_cases.csv"
+}

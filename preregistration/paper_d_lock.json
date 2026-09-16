@@ -1,21 +1,33 @@
 {
   "paper": "D",
-  "created_utc": "2026-09-16T06:23:00Z",
-  "stage1_commit": "74592d6c751c05b5c8b11004eb3dc66a03bcb9a5",
+  "created_utc": "2026-09-16T07:21:11Z",
+  "stage1_commit": "5caa29c109b0c1811469fe5b140734a728807376",
   "protocol_path": "preregistration/paper_d_breakhis_protocol.md",
   "protocol_sha256": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
   "tracked_file_sha256": {
     "preregistration/paper_d_breakhis_protocol.md": "28693828998635737b9a21162d2fb8998dfa8ba8909921f54075eb27956107fe",
     "papers/paper_d/config/circuit_registry.json": "85ed96048a4ce35aed0691adf441093e7272c3b168e2ad3d3a322189bd76fe14",
-    "papers/paper_d/README.md": "c2b2e50ab451a151a8c3f30a0359f91c6f99fb4ce4478c5272f5170da8212daf",
+    "papers/paper_d/README.md": "a29e1f132369ead09f185167bec355fc5798fb47abf2a3004d46b174eea9cea6",
     "papers/paper_d/CODE_AVAILABILITY.md": "fde8958463ce8f201d1b799bc27a21a8975254ab011f382a3ce6d69769ffe928",
     "papers/paper_d/PLAN.md": "c6d59490638690290de857c3e73cf0307e62424dc522e13f0f096929b913f66b",
-    "data/splits/breakhis/README.md": "e9f07722c1984720bc656cd2c37cf7d889ffb7aca75bb4ef9c888c691140b54f"
+    "data/splits/breakhis/README.md": "32409cd542ad46ad8ae7b4f4b8661c0d6883e7ceaccf35f62bc8c8d75cc49d7b"
   },
-  "split_artifact_sha256": {},
-  "breakhis_archive_sha256": null,
+  "split_artifact_sha256": {
+    "data/splits/breakhis/fold_0/test_cases.csv": "fce46628810d6611a37bc55002d39ee32d9b086ec34f2315b6f320f56e9615e5",
+    "data/splits/breakhis/fold_0/train_cases.csv": "9e08628a06d81e9363066fb32c23a8074372834adc6e55aa7909324adefee2fd",
+    "data/splits/breakhis/fold_1/test_cases.csv": "43623a828076ba59b945f1b3fe99907b26effc0b0bcb062d88560c260eba8fe7",
+    "data/splits/breakhis/fold_1/train_cases.csv": "6793f485c5b4fd0cfec1817ae7aa091e74ba47fc90cfaad6fd43063eb075cfb0",
+    "data/splits/breakhis/fold_2/test_cases.csv": "a504646e7ccd4993141b6db13c6144702b55511ec10854313345e57b5dab1a86",
+    "data/splits/breakhis/fold_2/train_cases.csv": "ca484f57fec45b24c2e27cf1128ce98bb8da1adc953e8e6b5ccd22a62fabdbfd",
+    "data/splits/breakhis/fold_3/test_cases.csv": "267106f95427c5628cb4a0767cfb9689b59687d1c41070ba7db7167029f77c94",
+    "data/splits/breakhis/fold_3/train_cases.csv": "e650be23ecbc28ced24c7ff4faa105e8343fc38e841c54c53c4189b221f0faf7",
+    "data/splits/breakhis/fold_4/test_cases.csv": "c6c5770e5644251e559c8963d72e2c5ec6ac37774f6107c70922294d331892f3",
+    "data/splits/breakhis/fold_4/train_cases.csv": "1a20e0d2fea14ad09dc96ca6270552160bfc8d335a1841c16e5eba7c2278b5dc",
+    "data/splits/breakhis/split_stats.json": "9f6ecb7b803f8f17b8ccbf2375d7f8cb17ab936aa6ee63e7eb4ba3a51286f08f"
+  },
+  "breakhis_archive_sha256": "d118014cf8a58f6d1fc4571e55efb523c932c85cfba2fb05627e455fc40bd640",
   "container_image_digest": null,
   "dependency_lock_sha256": null,
-  "partial_lock": true,
-  "notes": "partial Phase-0 stub; re-run without --allow-empty-splits after case lists and archive digest are available"
+  "partial_lock": false,
+  "notes": "confirmatory lock candidate \u2014 verify before labelled runs"
 }

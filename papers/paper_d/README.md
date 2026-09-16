@@ -31,6 +31,8 @@ bake-off; the estimand is domain shift with the same circuit family as Paper B.
 | [`scripts/write_paperd_lock.py`](scripts/write_paperd_lock.py) | yes | Stage-2 lock manifest writer |
 | [`scripts/verify_paperd_lock.py`](scripts/verify_paperd_lock.py) | yes | Recompute digests before labelled runs |
 | [`results/README.md`](results/README.md) | yes | What may be promoted from raw runs |
+| [`data/README.md`](data/README.md) | yes | Local BreakHis archive slot |
+| `data/BreaKHis_v1.tar.gz` | **no** | Official archive (~4GB; gitignored) |
 | `../../data/splits/breakhis/` | yes (case lists) | Case-ID folds; freeze before lock |
 | `../../preregistration/paper_d_breakhis_protocol.md` | yes | Binding protocol |
 | `../../preregistration/paper_d_lock.json` | yes (after Stage 2) | External lock manifest |

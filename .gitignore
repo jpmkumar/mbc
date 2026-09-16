@@ -156,6 +156,10 @@ papers/paper_d/results/
 !papers/paper_d/results/
 papers/paper_d/results/*
 !papers/paper_d/results/README.md
+!papers/paper_d/results/breakhis_archive_audit.md
+# BreakHis archive and extracted slides — local only (~4GB+).
+papers/paper_d/data/**
+!papers/paper_d/data/README.md
 papers/paper_d/assets/
 papers/paper_d/**/*.docx
 papers/paper_d/**/*.pdf

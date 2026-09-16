@@ -46,19 +46,21 @@ def git_commit() -> str:
 
 
 def collect_split_artifacts() -> dict[str, str]:
+    """Digest only committed fold artifacts (case lists + split_stats).
+
+    Rebuildable inventories (e.g. image_inventory.csv) are excluded so the lock
+    matches what GitHub reviewers can re-verify from the release tree.
+    """
     artifacts: dict[str, str] = {}
     if not SPLITS.is_dir():
         return artifacts
     for path in sorted(SPLITS.rglob("*")):
         if not path.is_file():
             continue
-        if path.name == "README.md":
-            continue
-        # Case lists and stats only — skip large rebuildable CSVs if present.
-        if path.suffix.lower() not in {".csv", ".json"}:
-            continue
-        rel = path.relative_to(ROOT).as_posix()
-        artifacts[rel] = sha256_file(path)
+        name = path.name
+        if name == "split_stats.json" or name.endswith("_cases.csv"):
+            rel = path.relative_to(ROOT).as_posix()
+            artifacts[rel] = sha256_file(path)
     return artifacts
 
 
