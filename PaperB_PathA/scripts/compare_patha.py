@@ -75,7 +75,30 @@ def summarise(progress_path: Path) -> dict | None:
     rec["stage_c_collapsed"] = bool(c) and max(c) <= 0.5 + 1e-9
     rec["stage_init_from_best"] = progress.get("stage_init_from_best")
     rec["stage_transitions"] = progress.get("stage_transitions")
+    rec.update(test_from_cv_summary(progress_path))
     return rec
+
+
+def test_from_cv_summary(progress_path: Path) -> dict:
+    """Pull selected-checkpoint test metrics from a sibling cv_summary.json."""
+    empty = {"test_bal_acc": None, "test_f1": None, "test_auprc": None}
+    for parent in (progress_path.parent, progress_path.parent.parent):
+        cv_path = parent / "cv_summary.json"
+        if not cv_path.exists():
+            continue
+        payload = load_json(cv_path)
+        if not payload:
+            continue
+        rows = payload.get("results", {}).get("E3") or payload.get("results", {}).get("e3")
+        if not rows:
+            continue
+        test = rows[0].get("test_metrics") or {}
+        return {
+            "test_bal_acc": test.get("balanced_accuracy"),
+            "test_f1": test.get("f1"),
+            "test_auprc": test.get("auprc"),
+        }
+    return empty
 
 
 def collect_patha() -> dict[str, dict[int, dict]]:
@@ -115,6 +138,13 @@ def fmt(x, nd=4):
     return "     -" if x is None else f"{x:.{nd}f}"
 
 
+def mean_sd(xs):
+    n = len(xs)
+    mu = sum(xs) / n
+    var = sum((x - mu) ** 2 for x in xs) / (n - 1) if n > 1 else 0.0
+    return f"{mu:.3f}±{(var ** 0.5):.3f}"
+
+
 def print_arm(title: str, recs: dict[int, dict]) -> None:
     print(f"\n=== {title} ===")
     if not recs:
@@ -130,6 +160,19 @@ def print_arm(title: str, recs: dict[int, dict]) -> None:
     quantum = [f for f, r in recs.items() if r["selected_stage"] not in (None, "stage_a")]
     print(f"  quantum-selected folds: {len(quantum)}/{len(recs)}"
           + (f"  -> {sorted(quantum)}" if quantum else ""))
+    if any(r.get("test_bal_acc") is not None for r in recs.values()):
+        print(f"  {'fold':>4} {'test bal':>9} {'test F1':>8} {'test AUPRC':>11}")
+        bals, f1s = [], []
+        for fold in sorted(recs):
+            r = recs[fold]
+            print(f"  {fold:>4} {fmt(r.get('test_bal_acc'))} {fmt(r.get('test_f1'))} "
+                  f"{fmt(r.get('test_auprc'))}")
+            if r.get("test_bal_acc") is not None:
+                bals.append(r["test_bal_acc"])
+            if r.get("test_f1") is not None:
+                f1s.append(r["test_f1"])
+        if bals:
+            print(f"  mean±sd test bal_acc {mean_sd(bals)}  F1 {mean_sd(f1s)}")
 
 
 def summary_line(patha: dict[str, dict[int, dict]]) -> str:
@@ -215,6 +258,10 @@ def main() -> None:
                   f"vs Kaggle {fmt(published[fold]['a_best'])}  (delta {d:+.4f})")
         print("  Large deltas mean the environments are not interchangeable; report them")
         print("  rather than pooling the two.")
+        kaggle_q = [f for f, r in published.items() if r["selected_stage"] not in (None, "stage_a")]
+        a0_q = [f for f, r in ctrl.items() if r["selected_stage"] not in (None, "stage_a")]
+        print(f"  selection: Kaggle quantum {sorted(kaggle_q) or 'none'}  "
+              f"A0 quantum {sorted(a0_q) or 'none'}  (do not pool)")
 
 
 if __name__ == "__main__":

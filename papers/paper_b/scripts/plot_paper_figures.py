@@ -517,7 +517,7 @@ def plot_fig7(probs_dir: Path | None = None) -> Path:
     ax_roc.plot([0, 1], [0, 1], ls=":", color="#888", lw=0.8)
     ax_roc.set_xlabel("False positive rate", fontsize=FS_LABEL)
     ax_roc.set_ylabel("True positive rate", fontsize=FS_LABEL)
-    ax_roc.set_title("(A) ROC, fold-0 test", fontsize=FS_TITLE, fontweight="bold")
+    ax_roc.set_title("(a) ROC, fold-0 test", fontsize=FS_TITLE, fontweight="bold")
     ax_roc.set_xlim(0, 1)
     ax_roc.set_ylim(0, 1)
     ax_roc.legend(frameon=False, fontsize=FS_LEGEND, loc="lower right", handlelength=1.6)
@@ -531,7 +531,7 @@ def plot_fig7(probs_dir: Path | None = None) -> Path:
         ax_pr.axhline(prevalence, ls=":", color="#888", lw=0.8, label=f"Prevalence ({prevalence:.2f})")
     ax_pr.set_xlabel("Recall", fontsize=FS_LABEL)
     ax_pr.set_ylabel("Precision", fontsize=FS_LABEL)
-    ax_pr.set_title("(B) Precision–recall, fold-0 test", fontsize=FS_TITLE, fontweight="bold")
+    ax_pr.set_title("(b) Precision–recall, fold-0 test", fontsize=FS_TITLE, fontweight="bold")
     ax_pr.set_xlim(0, 1)
     ax_pr.set_ylim(0, 1)
     # Opaque backing: the prevalence rule sits at 0.29 and would otherwise run
@@ -654,18 +654,23 @@ def plot_fig9_stage_b() -> Path:
         ax_a.plot(x, deltas, marker=marker, ls=ls, color=color, lw=1.3, markersize=4.5, label=label, zorder=3)
     ax_a.set_xticks(x)
     ax_a.set_xticklabels([f"F{f}" for f in folds])
-    ax_a.set_ylim(-0.014, 0.021)
+    # Headroom above the largest gap (fold 3, about +0.016) so the legend
+    # sits clear of both series.
+    ax_a.set_ylim(-0.016, 0.040)
     ax_a.set_xlabel("Cross-validation fold", fontsize=7.5)
     ax_a.set_ylabel("VQC − MLP test AUPRC", fontsize=7.5)
-    ax_a.set_title("(A) Per-fold frozen-head gap", fontsize=8, fontweight="bold")
-    ax_a.legend(frameon=False, fontsize=6.5, loc="upper left", handlelength=2.2)
+    ax_a.set_title("(a) Per-fold frozen-head gap", fontsize=8, fontweight="bold")
+    ax_a.legend(
+        frameon=False, fontsize=6.5, loc="upper left",
+        handlelength=1.6, borderaxespad=0.15, labelspacing=0.25,
+    )
     ax_a.text(
-        0.97,
-        0.03,
+        0.98,
+        0.78,
         f"shaded: ±{margin:.2f} margin",
         transform=ax_a.transAxes,
         ha="right",
-        va="bottom",
+        va="top",
         fontsize=6,
         style="italic",
         color="#555",
@@ -696,11 +701,17 @@ def plot_fig9_stage_b() -> Path:
     ax_b.axhline(margin, color="#555", lw=0.8, ls=":")
     ax_b.set_xticks(x)
     ax_b.set_xticklabels([f"F{f}" for f in folds])
-    ax_b.set_ylim(0, 0.047)
+    # Tallest bar is the locked-rate MLP on fold 3 (about 0.039). The legend
+    # needs the band above that bar, or the labels run through the bars.
+    ax_b.set_ylim(0, 0.072)
     ax_b.set_xlabel("Cross-validation fold", fontsize=7.5)
     ax_b.set_ylabel("Seed spread in test AUPRC", fontsize=7.5)
-    ax_b.set_title("(B) Convergence reliability", fontsize=8, fontweight="bold")
-    ax_b.legend(frameon=False, fontsize=6.5, loc="upper left", handlelength=1.4, handletextpad=0.5)
+    ax_b.set_title("(b) Convergence reliability", fontsize=8, fontweight="bold")
+    ax_b.legend(
+        frameon=False, fontsize=6.5, loc="upper left",
+        handlelength=1.2, handletextpad=0.4, borderaxespad=0.15,
+        labelspacing=0.2,
+    )
 
     rows = [
         ("nested", "sensitivity", "Nested LR\nfolds 1–4", mlp_color),
@@ -727,11 +738,12 @@ def plot_fig9_stage_b() -> Path:
             zorder=3,
         )
         ax_c.text(
-            0.0125,
-            i + 0.30,
+            max(ci["upper"] + 0.0018, 0.0125),
+            i + 0.22,
             f"$p$={d['equivalence_test']['p_value']:.3f}, "
             f"{'equivalent' if equivalent else 'inconclusive'}",
             va="bottom",
+            ha="left",
             fontsize=6,
             color=color,
         )
@@ -740,8 +752,8 @@ def plot_fig9_stage_b() -> Path:
     ax_c.set_ylim(-0.6, len(rows) - 0.25)
     ax_c.set_xlim(-0.013, 0.036)
     ax_c.set_xticks([-0.01, 0.0, 0.01, 0.02, 0.03])
-    ax_c.set_xlabel("Pooled VQC − MLP AUPRC (corrected 90% CI)", fontsize=7.5)
-    ax_c.set_title("(C) Cross-fold equivalence test", fontsize=8, fontweight="bold")
+    ax_c.set_xlabel("Pooled AUPRC gap, VQC − MLP (corrected 90% CI)", fontsize=7.5)
+    ax_c.set_title("(c) Cross-fold equivalence test", fontsize=8, fontweight="bold")
 
     for ax in (ax_a, ax_b, ax_c):
         ax.spines["top"].set_visible(False)
@@ -774,7 +786,7 @@ def plot_fig10_width_matrix() -> Path:
     marks = {4: ("o", "#2c6eaf"), 8: ("s", "#3a9d5c"), 12: ("^", "#c45c26")}
 
     fig, (ax_a, ax_b) = plt.subplots(
-        1, 2, figsize=(PRINT_W, 2.30), dpi=600, gridspec_kw={"width_ratios": [1.0, 1.22]}
+        1, 2, figsize=(PRINT_W, 2.70), dpi=600, gridspec_kw={"width_ratios": [1.05, 1.15]}
     )
 
     # ---------------------------------------------------------------- panel (A)
@@ -810,7 +822,7 @@ def plot_fig10_width_matrix() -> Path:
     ax_a.set_xlim(0.55, 4.45)
     ax_a.set_xlabel("Fold", fontsize=FS_LABEL)
     ax_a.set_ylabel("Test AUPRC", fontsize=FS_LABEL)
-    ax_a.set_title("(A) Server matrix, selected checkpoint",
+    ax_a.set_title("(a) Server cells, checkpoint kept",
                    fontsize=FS_TITLE, fontweight="bold")
     ax_a.set_ylim(0.845, 0.945)
     ax_a.legend(fontsize=FS_LEGEND, frameon=False, loc="upper left",
@@ -829,36 +841,54 @@ def plot_fig10_width_matrix() -> Path:
     ax_b.axvline(0.0, color="#1b1b1b", linewidth=0.8, zorder=1)
 
     for index, (label, contrast, color) in enumerate(rows):
-        y = len(rows) - 1 - index
+        y = (len(rows) - 1 - index) * 1.35
         interval = contrast["aggregate"]["corrected_interval_90"]
         mean = contrast["mean_delta_auprc"]
         ax_b.plot([interval["lower"], interval["upper"]], [y, y],
                   color=color, linewidth=1.3, solid_capstyle="butt", zorder=3)
         ax_b.plot([mean], [y], marker="D", markersize=3.6, color=color, zorder=4)
         for bound in (interval["lower"], interval["upper"]):
-            ax_b.plot([bound, bound], [y - 0.13, y + 0.13],
+            ax_b.plot([bound, bound], [y - 0.10, y + 0.10],
                       color=color, linewidth=1.3, zorder=3)
         n_folds = len(contrast["folds"])
-        ax_b.text(-0.043, y + 0.17, f"{label} ({n_folds} folds)",
-                  fontsize=FS_LEGEND, ha="left", va="bottom")
+        ax_b.text(
+            -0.044,
+            y + 0.18,
+            f"{label}\n({n_folds} folds)",
+            fontsize=6,
+            ha="left",
+            va="bottom",
+            linespacing=0.95,
+            color="#1b1b1b",
+            clip_on=False,
+            zorder=5,
+        )
 
     ax_b.set_yticks([])
-    ax_b.set_ylim(-0.6, len(rows) - 0.05)
+    ax_b.set_ylim(-0.35, (len(rows) - 1) * 1.35 + 0.95)
     ax_b.set_xlim(-0.045, 0.045)
     ax_b.set_xticks([-0.04, -0.02, 0.0, 0.02, 0.04])
-    ax_b.set_xlabel("Width $-$ 8-qubit AUPRC (corrected 90% CI)",
+    ax_b.set_xlabel("AUPRC gap from 8 qubits\n(corrected 90% CI)",
                     fontsize=FS_LABEL)
-    ax_b.set_title("(B) Paired width contrasts", fontsize=FS_TITLE,
+    ax_b.set_title("(b) Paired width contrasts", fontsize=FS_TITLE,
                    fontweight="bold")
-    ax_b.text(0.0, -0.47, f"shaded: $\\pm${margin:g} practical margin",
-              fontsize=FS_LEGEND, ha="center", va="center", color="#4d4d4d")
-    ax_b.tick_params(labelsize=FS_TICK, length=3, width=0.7)
+    ax_b.annotate(
+        f"shaded band: $\\pm${margin:g} practical margin",
+        xy=(0.5, -0.42),
+        xycoords="axes fraction",
+        ha="center",
+        va="top",
+        fontsize=6,
+        color="#4d4d4d",
+        annotation_clip=False,
+    )
+    ax_b.tick_params(axis="x", labelsize=FS_TICK, length=3, width=0.7)
     for side in ("top", "right", "left"):
         ax_b.spines[side].set_visible(False)
     ax_b.grid(axis="x", linestyle=":", alpha=0.4, zorder=0)
 
-    fig.subplots_adjust(left=0.105, right=0.995, top=0.90, bottom=0.155,
-                        wspace=0.16)
+    fig.subplots_adjust(left=0.11, right=0.99, top=0.90, bottom=0.30,
+                        wspace=0.28)
     return save_figure(fig, "fig10_histopath_width_matrix")
 
 

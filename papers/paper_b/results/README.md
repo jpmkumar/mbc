@@ -33,8 +33,11 @@ cannot reproduce Table 3. The lookup mirrors `load_arm` in
 
 Table 3 means and standard deviations are the per-fold values in
 `deployed_arms` aggregated over the five folds. The Table 4 Friedman statistics
-are `scipy.stats.friedmanchisquare` over the three arms' five per-fold values,
-which reproduces chi-square 1.60 (F1), 2.80 (balanced accuracy) and 1.20
-(AUPRC). Stage-selection counts come from `quantum_stage_evidence` in each width
-arm: two server 12-qubit cells and two Kaggle 4-qubit cells select Stage B, so
-Stage A wins fourteen of the eighteen end-to-end cells.
+are computed over the three arms' five per-fold values, which reproduces
+chi-square 1.60 (F1), 2.80 (balanced accuracy) and 1.20 (AUPRC). Because
+`n = 5`, the manuscript reports exact randomisation p-values obtained by
+enumerating all `6^5 = 7776` within-fold permutations of the three arm labels:
+0.52, 0.37 and 0.69, respectively. Stage-selection counts come from
+`quantum_stage_evidence` in each width arm: two server 12-qubit cells and two
+Kaggle 4-qubit cells select Stage B, so Stage A wins fourteen of the eighteen
+end-to-end cells.
