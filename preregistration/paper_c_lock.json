@@ -1,0 +1,87 @@
+{
+  "paper": "C",
+  "created_utc": "2026-11-06T12:08:24Z",
+  "stage1_commit": "f5cc597e8989a1164db771b18b1ef68d57f1d1d9",
+  "protocol_path": "preregistration/paper_c_protocol.md",
+  "protocol_sha256": "eccc9420e0c780ccf6ec49a69b6d785ffb16cd56852c4b96ee1ad11a577c4ff9",
+  "tracked_file_sha256": {
+    "preregistration/paper_c_protocol.md": "eccc9420e0c780ccf6ec49a69b6d785ffb16cd56852c4b96ee1ad11a577c4ff9",
+    "papers/paper_c/config/model_registry.json": "f704a084813fea90a07730c58708578f3e5e6e13d3011a3877e4f2f660b0aaa7",
+    "data/splits/paper_c/idc/inner_split_summary.json": "46e8f4494422ac201a53ee5a9c8438fcd11c9a128ba87ebe12c6aa721e14de00",
+    "papers/paper_c/PLAN.md": "0390125734b4d21b8e1b3db68f8d800a5bd0cad5be2890bf6b8359eb7c36f742",
+    "papers/paper_c/SERVER_PAPER_C.md": "f9eb9d6eaed877a4cf3d50e9d2144c273b7fdb159d239d92a3fe3501737ef7c3",
+    "papers/paper_c/scripts/extract_embeddings.py": "217e46dd6f9aef2b1e524bacdce9c586dbfd33221ad5877a82848bda7070f02b",
+    "papers/paper_c/scripts/build_bcss_centres.py": "abc2bdb48585e20072f8c2328c53491b4a323b5165fb64c1b98f4ee66b64fe61"
+  },
+  "split_artifact_sha256": {
+    "data/splits/paper_c/idc/folds/fold_0/inner_cal_case_ids.csv": "1209ba3bdfd160fe886611b6907406f52c06b61d25df96de09186ec861ddc66a",
+    "data/splits/paper_c/idc/folds/fold_0/inner_train_case_ids.csv": "6ae513edbb05052a2ee22a0467d503aff79da1b521e9182fd2a0a6dfef16400d",
+    "data/splits/paper_c/idc/folds/fold_0/inner_val_case_ids.csv": "2fec3e5699d99f59a54581365adb2e04110b02e26b25b9caae6c8bfbf54b002e",
+    "data/splits/paper_c/idc/folds/fold_0/outer_test_case_ids.csv": "884e75d956a2ab3634e9265c1fb8e1bdf6859fe41a7ca78d1eecb84fa7caec34",
+    "data/splits/paper_c/idc/folds/fold_1/inner_cal_case_ids.csv": "e34b5939521fc1da9651391389fecfcccfbca1cf5e450781f405f43b673c7c84",
+    "data/splits/paper_c/idc/folds/fold_1/inner_train_case_ids.csv": "742a8ceca2191bdcdd8ca7daa32c6dc1bbed3b5924619218dec4f1019d45ed8e",
+    "data/splits/paper_c/idc/folds/fold_1/inner_val_case_ids.csv": "eb8176f4ef859dcbb45dbe5ea36ab79d806b9bf36ebcb3a11c942acdefbe2672",
+    "data/splits/paper_c/idc/folds/fold_1/outer_test_case_ids.csv": "1b5e013e328bb434163e84cddf3e1b6fce6c8b255ef3981e8cca9ce169b0d7d8",
+    "data/splits/paper_c/idc/folds/fold_2/inner_cal_case_ids.csv": "bb667cd094ec2f1fefaa7c88aac33bd59617c2e1407b4c099785b7fdd6189038",
+    "data/splits/paper_c/idc/folds/fold_2/inner_train_case_ids.csv": "7e45083c4c8fcca56bb94d428a2fb1eac0a7881ec5204facefbed847b7aa6ec7",
+    "data/splits/paper_c/idc/folds/fold_2/inner_val_case_ids.csv": "1edb6cff7f266cd2db8ccaa4d4a307dda098d258893e06a8e5524c3eba1df976",
+    "data/splits/paper_c/idc/folds/fold_2/outer_test_case_ids.csv": "379877458b7a1a86472ceae16f1fa7b50b7199800f06828d601728db1099fdcb",
+    "data/splits/paper_c/idc/folds/fold_3/inner_cal_case_ids.csv": "5e608801146cc7d3b8714bbf80eb4c19224ae48aa43268429f22b955e2be517e",
+    "data/splits/paper_c/idc/folds/fold_3/inner_train_case_ids.csv": "abffec5e1995bdc542b0dc137d5cd8a49190b89c3ecb09a0414a37742f37a75e",
+    "data/splits/paper_c/idc/folds/fold_3/inner_val_case_ids.csv": "65e8c6fc6d3343e044fe8511a4de061b71342d8b51e7bab826d34b49dbc9556d",
+    "data/splits/paper_c/idc/folds/fold_3/outer_test_case_ids.csv": "5146007345f38c2d4519bc6ca4bd560af9035855eff915a7c7277add7e8f8619",
+    "data/splits/paper_c/idc/folds/fold_4/inner_cal_case_ids.csv": "ae2a1987c68b2f4da78b70c416fc41ab59565588ebad671eb427dd539e889048",
+    "data/splits/paper_c/idc/folds/fold_4/inner_train_case_ids.csv": "5e1348303e35db699c2cfcac61a22bd1a6a16c75a0ec972c98a8eb92dfae687f",
+    "data/splits/paper_c/idc/folds/fold_4/inner_val_case_ids.csv": "04f9305c628dca7ff36e0088426889da1a0c1307909105e03ac560e869211c0b",
+    "data/splits/paper_c/idc/folds/fold_4/outer_test_case_ids.csv": "82929b3d13daf5b8b335e35b510bdae59747a4fc2ab9d6d4593f9953525fa52c",
+    "data/splits/paper_c/idc/inner_split_summary.json": "46e8f4494422ac201a53ee5a9c8438fcd11c9a128ba87ebe12c6aa721e14de00"
+  },
+  "server_artifact_sha256": {
+    "/home/kumar_24phd0656/mbc-primary/provenance/paper-c/bcss_centres.csv": "2e47a2cc874966703228c3b5bed2c5621b785ef7e2f9efb22b0295cda9ec25a8",
+    "/home/kumar_24phd0656/mbc-primary/provenance/paper-c/bcss_patient_splits.csv": "8d884bd3c8b9c2f3aa6bb28a944ac282682ec57e2f958689232f42b88ea854ca",
+    "/home/kumar_24phd0656/mbc-primary/provenance/paper-c/idc_patch_manifest.csv": "b28e4acc2c3482256c17971cd422e39713d5ca4df860bc2929a31b3104caa266",
+    "/home/kumar_24phd0656/mbc-primary/provenance/paper-c/idc-context/idc_context_eligibility.csv": "e970ae0b03b4c1f9fbbd8bebcbe6082b309c610a0844f4c55cfd45a4df20f1b7"
+  },
+  "encoder_revisions": {
+    "dinov2_vitl14": {
+      "status": "confirmatory",
+      "provider": "torchhub",
+      "repo_id": "facebookresearch/dinov2",
+      "revision": "e1277af2ba9496fbadf7aec6eba56e8d882d1e35",
+      "weights": null
+    },
+    "resnet50": {
+      "status": "confirmatory",
+      "provider": "torchvision",
+      "repo_id": "torchvision.models.resnet50",
+      "revision": "torchvision-0.21-resnet50-imagenet1k-v2",
+      "weights": "ResNet50_Weights.IMAGENET1K_V2"
+    },
+    "phikon_v2": {
+      "status": "unavailable",
+      "provider": "transformers",
+      "repo_id": "owkin/phikon-v2",
+      "revision": "2ae989a9c40cffaa27f0a6cb29cc94d1d6f9a5fd",
+      "weights": null
+    },
+    "uni2_h": {
+      "status": "unavailable",
+      "provider": "timm",
+      "repo_id": "MahmoodLab/UNI2-h",
+      "revision": "d517a8dd47902dd7c308b3c36f63bce47e7b9a43",
+      "weights": null
+    },
+    "virchow2": {
+      "status": "unavailable",
+      "provider": "timm",
+      "repo_id": "paige-ai/Virchow2",
+      "revision": "3158645804b69e3f3bc4439d4116edddf0840a72",
+      "weights": null
+    }
+  },
+  "idc_archive_sha256": "96751bd9ebc5ec2e7b5cbf6cdc7ca8f0a9546379d52418fce11b15f8ccb30b8e",
+  "container_image_id": "sha256:9ebe71ad26645b8b9bccd4837943f6ad068c8d1665f7024dc8c56d1a443f72ed",
+  "dependency_lock_sha256": "618ac492ebc7bafdc605008eb5d01d7980fafe9720527f7128e6faff77800e40",
+  "partial_lock": false,
+  "notes": "confirmatory lock \u2014 verify before labelled runs; label-blind embedding extraction may proceed"
+}
