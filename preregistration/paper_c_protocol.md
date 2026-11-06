@@ -1,10 +1,13 @@
 # Paper C protocol — grouping and field-of-view effects in pathology foundation models
 
-**Status:** DRAFT — not yet outcome-locked.  
+**Status:** LOCKED — outcome-locked; labelled comparative probes may proceed
+only after Stage-2/3 lock verify.  
 **Created:** 2026-08-21.  
-**Amended:** 2026-09-01.  
-**Lock condition:** change status to `LOCKED`, then complete the lock procedure
-in section 11 before any labelled comparative probe is run.
+**Amended:** 2026-09-01; 2026-11-06 (ungated panel + BCSS stride 150).  
+**Locked:** 2026-11-06.  
+**Lock condition:** status is `LOCKED`; complete Stage 2–3 in section 11 before
+any labelled comparative probe is run. Label-blind embedding extraction is
+permitted once Stage 1 is committed.
 
 Engineering tests that load models, inspect dimensions, assemble synthetic
 mosaics or extract a small unlabeled cache are permitted while this document is
@@ -15,6 +18,11 @@ weighting regime across both arms of the co-primary protocol contrast so that it
 isolates grouping, demotes the conventional bundled regime to an ordered
 secondary, declares a smallest effect size of interest, and replaces the
 self-referential lock record with an external lock manifest.
+
+The 2026-11-06 amendment, also before any labelled comparison, retires gated
+Hugging Face pathology encoders that the executing institution cannot lawfully
+obtain, and retargets both co-primary contrasts onto the openly downloadable
+DINOv2 ViT-L/14 reference encoder.
 
 ## 1. Research questions
 
@@ -54,22 +62,31 @@ identical-target validation cohort.
 
 ## 3. Models
 
-Reference encoder for both co-primary contrasts: **UNI2-h**.
+Reference encoder for both co-primary contrasts: **DINOv2 ViT-L/14**.
 
-Predeclared panel:
+### Confirmatory panel (executable without gated Hugging Face access)
 
-1. UNI2-h;
-2. Virchow2;
-3. Phikon-v2;
-4. DINOv2 ViT-L/14;
-5. ImageNet ResNet-50.
+1. DINOv2 ViT-L/14 — reference encoder (`torch.hub` / Facebook Research release);
+2. ImageNet ResNet-50 — conventional control (`torchvision` weights CDN).
 
-Primary adaptation is frozen embeddings plus a deterministic linear probe.
-Exact Hugging Face or torchvision revisions, vendor transforms, output pooling,
-licences and artifact SHA-256 values must be entered in
-`papers/paper_c/config/model_registry.json` before protocol lock. A model whose
-revision cannot be frozen or whose licence prevents the intended analysis is
-reported as unavailable; it is not silently replaced after outcomes are seen.
+### Declared unavailable before labelled comparisons
+
+1. UNI2-h — gated CC-BY-NC-ND Hugging Face weights; institutional account
+   approval cannot be completed at the executing site;
+2. Virchow2 — same institutional gated-access barrier;
+3. Phikon-v2 — Hugging Face / Owkin access not obtainable under the same site
+   policy.
+
+These three remain listed in `papers/paper_c/config/model_registry.json` with
+`status: unavailable` and an explicit reason. They are **not** replaced by other
+gated models after outcomes are seen. The manuscript must state that the study
+quantifies grouping and field-of-view effects for **openly redistributable**
+frozen encoders, not for the gated pathology-foundation-model panel used in
+some prior IDC benchmarks.
+
+Primary adaptation remains frozen embeddings plus a deterministic linear probe.
+Exact revisions, vendor transforms, output pooling, licences and artifact
+SHA-256 values must be recorded in the registry before protocol lock.
 
 ## 4. Partitions and probe tuning
 
@@ -151,18 +168,22 @@ case balancing; it remains a stated limitation.
 
 Mosaics are forbidden in the IDC random-patch protocol.
 
-For BCSS, sample a fixed centre grid from native 0.25 µm/pixel images. Ignore
-mask classes `outside_roi`, `exclude` and `undetermined`. Class `tumor` is
+For BCSS, sample a fixed centre grid from native 0.25 µm/pixel images with
+**stride 150 pixels** (centre size 50, context window 450). Stride 50 was
+rejected before labelled comparisons because it produced highly redundant
+centres (~6× denser than needed for overnight A4000 extraction). Ignore mask
+classes `outside_roi`, `exclude` and `undetermined`. Class `tumor` is
 positive; all other valid tissue classes, including DCIS, are negative. Require
-at least 80% valid pixels and 80% class purity in the centre 50×50 region.
+at least 80% valid pixels and 80% class purity in the centre 50×50 region. The
+frozen centre-manifest SHA-256 is recorded in the external lock after rebuild.
 
 ## 6. Co-primary estimands
 
 1. `Δ_protocol`: IDC random-patch minus case-ID-grouped case-balanced AUPRC for
-   UNI2-h at `K=1` under the **harmonised** weighting regime, using paired
-   out-of-fold predictions for all patches.
-2. `Δ_context`: IDC grouped `K=9` minus `K=1` case-balanced AUPRC for UNI2-h on
-   complete-neighbourhood centres.
+   DINOv2 ViT-L/14 at `K=1` under the **harmonised** weighting regime, using
+   paired out-of-fold predictions for all patches.
+2. `Δ_context`: IDC grouped `K=9` minus `K=1` case-balanced AUPRC for DINOv2
+   ViT-L/14 on complete-neighbourhood centres.
 
 Holm's procedure controls family-wise error at 0.05 across these two tests.
 Two-sided 95% intervals are reported.
@@ -183,17 +204,17 @@ as such.
 
 ## 7. Ordered secondary analyses
 
-1. The bundled-regime protocol contrast for UNI2-h, reported alongside the
-   harmonised co-primary so the contribution of conventional random-patch
+1. The bundled-regime protocol contrast for DINOv2 ViT-L/14, reported alongside
+   the harmonised co-primary so the contribution of conventional random-patch
    tuning practice is visible.
-2. Protocol and context contrasts for the remaining encoders.
-3. Model-rank changes across protocols and contexts, with rank uncertainty
-   computed inside synchronised whole-case bootstrap replicates rather than
-   from a five-model Kendall p-value.
+2. Protocol and context contrasts for ResNet-50.
+3. Model-rank changes across protocols and contexts for the two confirmatory
+   encoders, with rank uncertainty computed inside synchronised whole-case
+   bootstrap replicates.
 4. Unweighted AUPRC and case-balanced/clustered AUROC.
 5. MCC, sensitivity and specificity at validation-locked thresholds.
 6. Calibration intercept/slope, Brier score, log loss and reliability plots.
-7. BCSS `K=9 − K=1` context replication for UNI2-h, followed by other encoders.
+7. BCSS `K=9 − K=1` context replication for DINOv2 ViT-L/14, then ResNet-50.
 8. Empirical risk–coverage curves.
 9. BCSS ROI-level tumour-area agreement.
 10. A separately declared last-block fine-tuning sensitivity analysis, only if
@@ -233,7 +254,7 @@ label prevalences and assumed effect grids, without model predictions.
 - If `Δ_protocol` is small with an interval excluding a material optimism
   effect, do not claim that IDC literature is substantially inflated.
 - If `Δ_context` is small with an interval excluding a material gain, reject the
-  context-starvation mechanism for UNI2-h.
+  context-starvation mechanism for DINOv2 ViT-L/14 under this design.
 - If BCSS does not replicate the context direction, restrict conclusions to the
   IDC derivative.
 - If ranks remain stable, reject the rank-instability hypothesis.
@@ -293,9 +314,11 @@ Artifacts known at drafting time, to be re-verified rather than trusted:
 | Artifact | Path | SHA-256 at drafting |
 |---|---|---|
 | IDC inner split summary | `data/splits/paper_c/idc/inner_split_summary.json` | `46e8f4494422ac201a53ee5a9c8438fcd11c9a128ba87ebe12c6aa721e14de00` |
-| Model registry | `papers/paper_c/config/model_registry.json` | `28da488906a2bb4e3725cc279624e6e3b0ede0ad67a7c5f8ebd98aaa1d4cfdb7` |
+| Model registry | `papers/paper_c/config/model_registry.json` | `f704a084813fea90a07730c58708578f3e5e6e13d3011a3877e4f2f660b0aaa7` |
 | IDC coordinate/eligibility index | server-generated | `e970ae0b03b4c1f9fbbd8bebcbe6082b309c610a0844f4c55cfd45a4df20f1b7` |
 | IDC filepath-keyed protocol manifest | server-generated | `b28e4acc2c3482256c17971cd422e39713d5ca4df860bc2929a31b3104caa266` |
+| BCSS patient splits | server-generated | `8d884bd3c8b9c2f3aa6bb28a944ac282682ec57e2f958689232f42b88ea854ca` |
+| BCSS centres (stride 150) | server-generated | `2e47a2cc874966703228c3b5bed2c5621b785ef7e2f9efb22b0295cda9ec25a8` |
 
 The IDC outer split manifest digest is inherited from the shared histopathology
 release and must be re-stated in the lock manifest against an explicit path,

@@ -5,18 +5,19 @@ campus RTX A4000. Paper B images, caches and result values are not reused.
 
 ## Current gate
 
-Do not run labelled probes until all five encoders pass model-loading,
-dimension, memory and fp16-equivalence checks; the dependency lock hash is
-hard-pinned; BCSS/IDC manifests are frozen; and
-`preregistration/paper_c_protocol.md` is marked `LOCKED`.
+**2026-11-06:** protocol status is `LOCKED`. Confirmatory encoders
+(`dinov2_vitl14`, `resnet50`) passed smoke + fp16 precision; BCSS centres are
+stride-150; IDC/BCSS manifests are frozen. Label-blind IDC `K=1` extraction may
+run. Do **not** run labelled probes until `preregistration/paper_c_lock.json`
+passes `verify_paperc_lock.py`.
 
-The three original P0 faults are addressed in code:
+**Ungated redesign:** UNI2-h, Virchow2 and Phikon-v2 are declared unavailable
+(institutional Hugging Face gated access cannot be completed). No Hugging Face
+Read token is required for the confirmatory panel. Weights load from `torch.hub`
+(DINOv2) and `torchvision` (ResNet-50).
 
-- Virchow2 returns token-level output and pools `CLS || mean(patch)` after
-  excluding CLS plus four register tokens;
-- caches and manifests join only on unique `filepath`;
-- the image builder refuses to run until
-  `docker/requirements-paperc.lock` has a hard-coded qualified SHA.
+Caches and manifests join only on unique `filepath`. The image builder refuses
+to run until `docker/requirements-paperc.lock` has a hard-coded qualified SHA.
 
 ## 1. Server preparation
 
@@ -27,15 +28,9 @@ export MBC_PRIMARY_ROOT="$HOME/mbc-primary"
 mkdir -p "$MBC_PRIMARY_ROOT"/{cache,embeddings,logs,provenance/paper-c,results/paper-c}
 ```
 
-Create a Hugging Face token file outside the repository:
-
-```bash
-umask 077
-printf '%s\n' 'hf_REPLACE_WITH_YOUR_TOKEN' > "$MBC_PRIMARY_ROOT/hf_token"
-```
-
-The Hugging Face account must have individually accepted the gated UNI2-h and
-Virchow2 licences. The weights and embeddings cannot be redistributed.
+No Hugging Face token is required for the confirmatory panel. Server outbound
+HTTPS must reach the PyTorch / GitHub endpoints used by `torchvision` and
+`torch.hub`. Gated UNI2-h / Virchow2 / Phikon-v2 downloads are not attempted.
 
 ## 2. Resolve and pin the environment
 
@@ -96,45 +91,60 @@ Expected pre-outcome context counts are `K1=277524`, `K3=162018`,
 
 ## 4. Qualify encoders
 
-The model registry pins full Hugging Face revisions:
+The confirmatory registry uses openly downloadable DINOv2 and ResNet-50
+weights (no Hugging Face token). Do not inspect labelled probe performance.
+
+### 4a. Confirmatory smoke (no HF token)
 
 ```bash
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
-  papers/paper_c/scripts/run_smoke_paperc_encoder.sh "$encoder"
+cd "$HOME/projects/mbc"
+export MBC_PRIMARY_ROOT="$HOME/mbc-primary"
+source results/server_setup/current_paperc_image.env
+
+# Sync the 2026-11-06 ungated registry + extract_embeddings.py first.
+chmod +x papers/paper_c/scripts/run_smoke_paperc_encoder.sh \
+         papers/paper_c/scripts/run_extract_embeddings.sh
+
+for encoder in dinov2_vitl14 resnet50; do
+  bash papers/paper_c/scripts/run_smoke_paperc_encoder.sh "$encoder"
 done
 ```
 
 Expected embedding dimensions:
 
-- UNI2-h: 1536
-- Virchow2: 2560
-- Phikon-v2: 1024
 - DINOv2 ViT-L/14: 1024
 - ResNet-50: 2048
 
 The report must show `PASS`, finite output and a batch peak below the 16 GB
 A4000 limit. Lower the model's `batch_size_a4000` in the registry if necessary,
 rerun every smoke test, and update the registry hash in the preregistration
-before lock.
+before lock. Attempts to smoke `uni2_h`, `virchow2` or `phikon_v2` must exit
+with the registry unavailable message.
 
-Qualify cache precision on the same 1,000 centres:
+### 4b. Precision check (both confirmatory encoders)
 
 ```bash
-papers/paper_c/scripts/run_extract_embeddings.sh uni2_h upsample224 \
-  --centre-limit 1000 --run-name precision-fp16
-papers/paper_c/scripts/run_extract_embeddings.sh uni2_h upsample224 \
-  --centre-limit 1000 --run-name precision-fp32 --fp32
-
-docker run --rm \
-  --mount type=bind,src="$MBC_PRIMARY_ROOT/embeddings",dst=/outputs,readonly \
-  "$MBC_IMAGE" \
-  python papers/paper_c/scripts/compare_embedding_precision.py \
-    --fp16-cache /outputs/uni2_h_upsample224__precision-fp16 \
-    --fp32-cache /outputs/uni2_h_upsample224__precision-fp32
+for encoder in dinov2_vitl14 resnet50; do
+  papers/paper_c/scripts/run_extract_embeddings.sh "$encoder" upsample224 \
+    --centre-limit 1000 --run-name precision-fp16
+  papers/paper_c/scripts/run_extract_embeddings.sh "$encoder" upsample224 \
+    --centre-limit 1000 --run-name precision-fp32 --fp32
+  docker run --rm \
+    --mount type=bind,src="$MBC_PRIMARY_ROOT/embeddings",dst=/outputs,readonly \
+    "$MBC_IMAGE" \
+    python papers/paper_c/scripts/compare_embedding_precision.py \
+      --fp16-cache /outputs/${encoder}_upsample224__precision-fp16 \
+      --fp32-cache /outputs/${encoder}_upsample224__precision-fp32
+done
 ```
 
-Repeat for each encoder. Smoke caches have unique namespaces and never require
-deleting a completed production cache.
+Equivalence gates are `cosine_min >= 0.995`, `cosine_mean >= 0.9999`, and
+`l2_normalized_abs_max <= 0.02`. Raw absolute maxima are reported only; they
+are dominated by near-zero feature units and are not the confirmatory fail
+criterion.
+
+Smoke caches have unique namespaces and never require deleting a completed
+production cache.
 
 Run unit tests inside the qualified image:
 
@@ -162,7 +172,7 @@ this point.
 ## 6. IDC K=1 extraction
 
 ```bash
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   papers/paper_c/scripts/run_extract_embeddings.sh "$encoder" upsample224
 done
 ```
@@ -176,7 +186,7 @@ For each encoder, run paired random and grouped out-of-fold probes:
 
 ```bash
 MANIFEST="$MBC_PRIMARY_ROOT/provenance/paper-c/idc_patch_manifest.csv"
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   CACHE="$MBC_PRIMARY_ROOT/embeddings/${encoder}_upsample224"
   for seed in 42 43 44; do
     # Co-primary: both arms harmonised, so the contrast isolates grouping.
@@ -206,7 +216,7 @@ comparison:
 
 ```bash
 IDC_ROOT="$MBC_PRIMARY_ROOT/results/paper-c/idc"
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   for condition in random-k1 grouped-k1 random-k1-bundled; do
     python papers/paper_c/scripts/average_seed_predictions.py \
       --prediction "$IDC_ROOT/${encoder}/${condition}/seed-42/oof_predictions.csv" --seed 42 \
@@ -219,11 +229,11 @@ done
 
 ## 8. IDC context extraction and probes
 
-The confirmatory reference contrast requires UNI2-h `K=9`; the full panel is an
+The confirmatory reference contrast requires DINOv2 ViT-L/14 `K=9`; the full panel is an
 ordered secondary analysis:
 
 ```bash
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   for context in mosaic3 mosaic5 mosaic9; do
     papers/paper_c/scripts/run_extract_embeddings.sh "$encoder" "$context"
   done
@@ -233,7 +243,7 @@ done
 Run grouped probes on the identical complete-`K=9` population:
 
 ```bash
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   for transform in upsample224 mosaic3 mosaic5 mosaic9; do
     for seed in 42 43 44; do
       python papers/paper_c/scripts/run_idc_probe_cv.py \
@@ -266,18 +276,38 @@ python papers/paper_c/scripts/build_bcss_patient_splits.py \
   --metadata "$MBC_PRIMARY_ROOT/datasets/bcss/mirror_rows.json" \
   --output "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_patient_splits.csv"
 
+# Archive any stride-50 manifest before rebuilding (protocol: stride 150).
+if [[ -f "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.csv" ]]; then
+  mv "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.csv" \
+     "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.stride50.bak.csv"
+  mv "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.summary.json" \
+     "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.stride50.bak.summary.json" \
+     2>/dev/null || true
+fi
+
 python papers/paper_c/scripts/build_bcss_centres.py \
   --images "$MBC_PRIMARY_ROOT/datasets/bcss/images" \
   --masks "$MBC_PRIMARY_ROOT/datasets/bcss/masks" \
   --metadata "$MBC_PRIMARY_ROOT/datasets/bcss/mirror_rows.json" \
   --patient-splits "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_patient_splits.csv" \
+  --stride 150 \
   --output "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.csv"
+
+python3 - <<'PY'
+import json
+from pathlib import Path
+summary = Path.home() / "mbc-primary/provenance/paper-c/bcss_centres.summary.json"
+print(summary.read_text())
+PY
 ```
+
+Expect roughly 60k–80k eligible centres at stride 150 (not ~608k). Record the
+printed SHA-256 in the lock manifest.
 
 Extract the same BCSS centres at both fields of view:
 
 ```bash
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   papers/paper_c/scripts/run_extract_bcss_embeddings.sh "$encoder" k1
   papers/paper_c/scripts/run_extract_bcss_embeddings.sh "$encoder" k9
 done
@@ -288,16 +318,16 @@ Then fit probes:
 ```bash
 for seed in 42 43 44; do
   python papers/paper_c/scripts/run_bcss_probe.py \
-    --cache "$MBC_PRIMARY_ROOT/embeddings/bcss_uni2_h_k1" \
+    --cache "$MBC_PRIMARY_ROOT/embeddings/bcss_dinov2_vitl14_k1" \
     --centre-manifest "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.csv" \
     --seed "$seed" \
-    --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/bcss/uni2_h/k1/seed-${seed}"
+    --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/bcss/dinov2_vitl14/k1/seed-${seed}"
 
   python papers/paper_c/scripts/run_bcss_probe.py \
-    --cache "$MBC_PRIMARY_ROOT/embeddings/bcss_uni2_h_k9" \
+    --cache "$MBC_PRIMARY_ROOT/embeddings/bcss_dinov2_vitl14_k9" \
     --centre-manifest "$MBC_PRIMARY_ROOT/provenance/paper-c/bcss_centres.csv" \
     --seed "$seed" \
-    --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/bcss/uni2_h/k9/seed-${seed}"
+    --output-dir "$MBC_PRIMARY_ROOT/results/paper-c/bcss/dinov2_vitl14/k9/seed-${seed}"
 done
 ```
 
@@ -307,10 +337,10 @@ Average the BCSS seeds as well, so inference consumes one bundle per condition:
 BCSS_ROOT="$MBC_PRIMARY_ROOT/results/paper-c/bcss"
 for context in k1 k9; do
   python papers/paper_c/scripts/average_seed_predictions.py \
-    --prediction "$BCSS_ROOT/uni2_h/${context}/seed-42/test_predictions.csv" --seed 42 \
-    --prediction "$BCSS_ROOT/uni2_h/${context}/seed-43/test_predictions.csv" --seed 43 \
-    --prediction "$BCSS_ROOT/uni2_h/${context}/seed-44/test_predictions.csv" --seed 44 \
-    --output "$BCSS_ROOT/uni2_h/${context}/seed_mean_predictions.csv"
+    --prediction "$BCSS_ROOT/dinov2_vitl14/${context}/seed-42/test_predictions.csv" --seed 42 \
+    --prediction "$BCSS_ROOT/dinov2_vitl14/${context}/seed-43/test_predictions.csv" --seed 43 \
+    --prediction "$BCSS_ROOT/dinov2_vitl14/${context}/seed-44/test_predictions.csv" --seed 44 \
+    --output "$BCSS_ROOT/dinov2_vitl14/${context}/seed_mean_predictions.csv"
 done
 ```
 
@@ -324,14 +354,14 @@ INF="$MBC_PRIMARY_ROOT/results/paper-c/inference"
 mkdir -p "$INF"
 
 python papers/paper_c/scripts/paired_case_bootstrap.py \
-  --left  "$IDC_ROOT/uni2_h/random-k1/seed_mean_predictions.csv" \
-  --right "$IDC_ROOT/uni2_h/grouped-k1/seed_mean_predictions.csv" \
+  --left  "$IDC_ROOT/dinov2_vitl14/random-k1/seed_mean_predictions.csv" \
+  --right "$IDC_ROOT/dinov2_vitl14/grouped-k1/seed_mean_predictions.csv" \
   --left-label random-k1 --right-label grouped-k1 \
   --replicates 10000 --output "$INF/delta_protocol.json"
 
 python papers/paper_c/scripts/paired_case_bootstrap.py \
-  --left  "$IDC_ROOT/uni2_h/grouped-mosaic9-complete-k9/seed_mean_predictions.csv" \
-  --right "$IDC_ROOT/uni2_h/grouped-upsample224-complete-k9/seed_mean_predictions.csv" \
+  --left  "$IDC_ROOT/dinov2_vitl14/grouped-mosaic9-complete-k9/seed_mean_predictions.csv" \
+  --right "$IDC_ROOT/dinov2_vitl14/grouped-upsample224-complete-k9/seed_mean_predictions.csv" \
   --left-label grouped-k9 --right-label grouped-k1 \
   --replicates 10000 --output "$INF/delta_context.json"
 
@@ -346,8 +376,8 @@ family:
 
 ```bash
 python papers/paper_c/scripts/paired_case_bootstrap.py \
-  --left  "$IDC_ROOT/uni2_h/random-k1-bundled/seed_mean_predictions.csv" \
-  --right "$IDC_ROOT/uni2_h/grouped-k1/seed_mean_predictions.csv" \
+  --left  "$IDC_ROOT/dinov2_vitl14/random-k1-bundled/seed_mean_predictions.csv" \
+  --right "$IDC_ROOT/dinov2_vitl14/grouped-k1/seed_mean_predictions.csv" \
   --left-label random-k1-bundled --right-label grouped-k1 \
   --replicates 10000 --output "$INF/delta_protocol_bundled.json"
 ```
@@ -357,8 +387,8 @@ must resample within institutions:
 
 ```bash
 python papers/paper_c/scripts/paired_case_bootstrap.py \
-  --left  "$MBC_PRIMARY_ROOT/results/paper-c/bcss/uni2_h/k9/seed_mean_predictions.csv" \
-  --right "$MBC_PRIMARY_ROOT/results/paper-c/bcss/uni2_h/k1/seed_mean_predictions.csv" \
+  --left  "$MBC_PRIMARY_ROOT/results/paper-c/bcss/dinov2_vitl14/k9/seed_mean_predictions.csv" \
+  --right "$MBC_PRIMARY_ROOT/results/paper-c/bcss/dinov2_vitl14/k1/seed_mean_predictions.csv" \
   --left-label bcss-k9 --right-label bcss-k1 \
   --strata-column site --replicates 10000 \
   --output "$INF/bcss_delta_context.json"
@@ -368,11 +398,11 @@ Ordered-secondary reliability and rank-stability reports:
 
 ```bash
 python papers/paper_c/scripts/secondary_reliability.py \
-  --predictions "$IDC_ROOT/uni2_h/grouped-k1/seed_mean_predictions.csv" \
-  --output-dir "$INF/reliability/uni2_h-grouped-k1"
+  --predictions "$IDC_ROOT/dinov2_vitl14/grouped-k1/seed_mean_predictions.csv" \
+  --output-dir "$INF/reliability/dinov2_vitl14-grouped-k1"
 
 RANK_ARGS=()
-for encoder in uni2_h virchow2 phikon_v2 dinov2_vitl14 resnet50; do
+for encoder in dinov2_vitl14 resnet50; do
   RANK_ARGS+=(--pair "$encoder" \
     "$IDC_ROOT/${encoder}/random-k1/seed-42/summary.json" \
     "$IDC_ROOT/${encoder}/grouped-k1/seed-42/summary.json")

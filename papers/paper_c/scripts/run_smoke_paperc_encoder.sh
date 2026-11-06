@@ -18,22 +18,43 @@ DATASET_DIR="${MBC_DATASET_DIR:-$PRIMARY_ROOT/datasets/breast-histopathology-ima
 CACHE_DIR="$PRIMARY_ROOT/cache"
 TOKEN_FILE="${HF_TOKEN_FILE:-$PRIMARY_ROOT/hf_token}"
 PROVENANCE_DIR="$PRIMARY_ROOT/provenance/paper-c"
-for path in "$DATASET_DIR" "$TOKEN_FILE"; do
-  [[ -e "$path" ]] || { echo "Required artifact not found: $path" >&2; exit 1; }
-done
-mkdir -p "$CACHE_DIR" "$PROVENANCE_DIR"
+[[ -e "$DATASET_DIR" ]] || { echo "Required artifact not found: $DATASET_DIR" >&2; exit 1; }
+
+# Overlay host Paper C sources onto the image tree so uncommitted redesigns
+# (ungated DINOv2 / ResNet loaders) are used without rebuilding the image.
+DOCKER_MOUNTS=(
+  --mount type=bind,src="$DATASET_DIR",dst=/datasets/histopath,readonly
+  --mount type=bind,src="$CACHE_DIR",dst=/cache
+  --mount type=bind,src="$ROOT/papers/paper_c",dst=/opt/mbc/papers/paper_c,readonly
+)
+INNER_PREFIX='exec'
+if [[ -f "$TOKEN_FILE" ]]; then
+  DOCKER_MOUNTS+=(--mount type=bind,src="$TOKEN_FILE",dst=/run/secrets/hf_token,readonly)
+  INNER_PREFIX='export HF_TOKEN="$(< /run/secrets/hf_token)"; exec'
+else
+  echo "No HF token file; confirmatory panel does not require one ($ENCODER)" >&2
+fi
+mkdir -p "$CACHE_DIR" "$PROVENANCE_DIR" \
+  "$CACHE_DIR/torch" "$CACHE_DIR/torchinductor" "$CACHE_DIR/triton" "$CACHE_DIR/torchhub"
 REPORT="$PROVENANCE_DIR/encoder_smoke_${ENCODER}.json"
 
 docker run --rm \
   --gpus device=0 \
   --user "$(id -u):$(id -g)" \
+  --env USER=mbc \
+  --env LOGNAME=mbc \
   --env HOME=/tmp \
+  --env XDG_CACHE_HOME=/cache \
+  --env TORCH_HOME=/cache/torch \
   --env HF_HOME=/cache/huggingface \
-  --mount type=bind,src="$DATASET_DIR",dst=/datasets/histopath,readonly \
-  --mount type=bind,src="$TOKEN_FILE",dst=/run/secrets/hf_token,readonly \
-  --mount type=bind,src="$CACHE_DIR",dst=/cache \
+  --env TORCHINDUCTOR_CACHE_DIR=/cache/torchinductor \
+  --env TRITON_CACHE_DIR=/cache/triton \
+  --shm-size=16g \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  "${DOCKER_MOUNTS[@]}" \
   "$MBC_IMAGE" \
-  bash -lc 'export HF_TOKEN="$(< /run/secrets/hf_token)"; exec python papers/paper_c/scripts/smoke_paperc_encoder.py "$@"' -- \
+  bash -lc "$INNER_PREFIX"' python papers/paper_c/scripts/smoke_paperc_encoder.py "$@"' -- \
     --encoder "$ENCODER" \
     --archive-path /datasets/histopath \
   | tee "$REPORT"

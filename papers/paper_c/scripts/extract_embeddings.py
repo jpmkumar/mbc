@@ -56,21 +56,54 @@ def registry_entry(path: Path, name: str) -> tuple[dict[str, Any], str]:
     registry = json.loads(raw)
     if name not in registry:
         raise SystemExit(f"Unknown encoder {name!r}; choose from {sorted(registry)}")
-    return registry[name], hashlib.sha256(raw).hexdigest()
+    spec = registry[name]
+    if spec.get("status") == "unavailable":
+        reason = spec.get("unavailable_reason", "declared unavailable")
+        raise SystemExit(
+            f"Encoder {name!r} is unavailable under the locked panel: {reason}"
+        )
+    return spec, hashlib.sha256(raw).hexdigest()
 
 
 def model_file_hashes(snapshot: Path) -> dict[str, str]:
-    loading_suffixes = {".json", ".safetensors", ".bin", ".py"}
+    loading_suffixes = {".json", ".safetensors", ".bin", ".py", ".pth", ".pt"}
     hashes = {
         str(path.relative_to(snapshot)): sha256(path)
         for path in sorted(snapshot.rglob("*"))
         if path.is_file() and path.suffix in loading_suffixes
     }
-    if "config.json" not in hashes or not any(
-        name.endswith((".safetensors", ".bin")) for name in hashes
-    ):
-        raise RuntimeError(f"Incomplete model snapshot at {snapshot}")
+    if not hashes:
+        raise RuntimeError(f"No model weight files found under {snapshot}")
     return hashes
+
+
+def state_dict_sha256(model: torch.nn.Module) -> dict[str, str]:
+    digest = hashlib.sha256()
+    for key, tensor in model.state_dict().items():
+        digest.update(key.encode("utf-8"))
+        digest.update(tensor.detach().cpu().numpy().tobytes())
+    return {"state_dict_sha256": digest.hexdigest()}
+
+
+def imagenet_transform(spec: dict[str, Any]) -> Callable[[Image.Image], torch.Tensor]:
+    from torchvision import transforms
+
+    size = int(spec.get("input_size", 224))
+    mean = list(spec.get("image_mean", [0.485, 0.456, 0.406]))
+    std = list(spec.get("image_std", [0.229, 0.224, 0.225]))
+    pipeline = transforms.Compose(
+        [
+            transforms.Resize(size, interpolation=transforms.InterpolationMode.BICUBIC),
+            transforms.CenterCrop(size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std),
+        ]
+    )
+
+    def transform(image: Image.Image) -> torch.Tensor:
+        return pipeline(image.convert("RGB"))
+
+    return transform
 
 
 def pool_virchow2_tokens(tokens: torch.Tensor) -> torch.Tensor:
@@ -105,16 +138,83 @@ def load_encoder(
     device: torch.device,
     cache_dir: Path,
 ) -> EncoderBundle:
-    """Download an exact snapshot, then load only from that local directory."""
+    """Load a confirmatory encoder from an ungated or local snapshot source."""
+    provider = spec["provider"]
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if provider == "torchvision":
+        from torchvision.models import ResNet50_Weights, resnet50
+
+        weights_name = str(spec.get("weights", "ResNet50_Weights.IMAGENET1K_V2"))
+        if weights_name.endswith("IMAGENET1K_V1"):
+            weights = ResNet50_Weights.IMAGENET1K_V1
+        else:
+            weights = ResNet50_Weights.IMAGENET1K_V2
+        model = resnet50(weights=weights)
+        model.fc = torch.nn.Identity()
+        transform = imagenet_transform(spec)
+
+        def forward(batch: torch.Tensor) -> torch.Tensor:
+            output = model(batch)
+            if output.ndim != 2:
+                raise RuntimeError(
+                    f"Expected a pooled feature matrix, got {tuple(output.shape)}"
+                )
+            return output
+
+        config = {
+            "input_size": [3, int(spec.get("input_size", 224)), int(spec.get("input_size", 224))],
+            "image_mean": list(spec.get("image_mean", [0.485, 0.456, 0.406])),
+            "image_std": list(spec.get("image_std", [0.229, 0.224, 0.225])),
+            "weights": weights_name,
+        }
+        snapshot = cache_dir / "torchvision" / "resnet50"
+        snapshot.mkdir(parents=True, exist_ok=True)
+        return EncoderBundle(
+            model, transform, forward, config, state_dict_sha256(model), snapshot
+        )
+
+    if provider == "torchhub":
+        torch.hub.set_dir(str(cache_dir / "torchhub"))
+        model = torch.hub.load(
+            spec["repo_id"],
+            spec["hub_entry"],
+            trust_repo=True,
+            verbose=False,
+        )
+        transform = imagenet_transform(spec)
+
+        def forward(batch: torch.Tensor) -> torch.Tensor:
+            output = model(batch)
+            if output.ndim != 2:
+                raise RuntimeError(
+                    f"Expected a pooled feature matrix, got {tuple(output.shape)}"
+                )
+            return output
+
+        config = {
+            "input_size": [3, int(spec.get("input_size", 224)), int(spec.get("input_size", 224))],
+            "image_mean": list(spec.get("image_mean", [0.485, 0.456, 0.406])),
+            "image_std": list(spec.get("image_std", [0.229, 0.224, 0.225])),
+            "hub_entry": spec["hub_entry"],
+            "revision": spec.get("revision"),
+        }
+        snapshot = cache_dir / "torchhub" / spec["hub_entry"]
+        snapshot.mkdir(parents=True, exist_ok=True)
+        return EncoderBundle(
+            model, transform, forward, config, state_dict_sha256(model), snapshot
+        )
+
     from huggingface_hub import snapshot_download
 
-    snapshot = Path(snapshot_download(
-        repo_id=spec["repo_id"],
-        revision=spec["revision"],
-        cache_dir=cache_dir,
-    ))
+    snapshot = Path(
+        snapshot_download(
+            repo_id=spec["repo_id"],
+            revision=spec["revision"],
+            cache_dir=cache_dir,
+        )
+    )
     hashes = model_file_hashes(snapshot)
-    provider = spec["provider"]
 
     if provider == "timm":
         import timm
@@ -173,7 +273,11 @@ def load_encoder(
             return output[:, 0]
 
         config = {
-            "input_size": [3, processor.size.get("height", 224), processor.size.get("width", 224)],
+            "input_size": [
+                3,
+                processor.size.get("height", 224),
+                processor.size.get("width", 224),
+            ],
             "image_mean": list(processor.image_mean),
             "image_std": list(processor.image_std),
         }

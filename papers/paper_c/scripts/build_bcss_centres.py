@@ -30,7 +30,12 @@ def main() -> int:
     parser.add_argument("--metadata", required=True, type=Path)
     parser.add_argument("--patient-splits", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--stride", type=int, default=50)
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=150,
+        help="Centre sampling stride in pixels (protocol default 150).",
+    )
     parser.add_argument("--centre-size", type=int, default=50)
     parser.add_argument("--context-size", type=int, default=450)
     parser.add_argument("--minimum-valid-fraction", type=float, default=0.8)

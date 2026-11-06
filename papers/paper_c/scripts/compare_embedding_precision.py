@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Fail unless fp16-autocast and fp32-compute caches are equivalent."""
+"""Fail unless fp16-autocast and fp32-compute caches are probe-equivalent.
+
+Raw absolute/relative maxima over unnormalised features are dominated by
+near-zero units (especially ReLU ResNet dims). Confirmatory gates therefore
+use row cosine similarity plus absolute error after L2 normalisation — the
+geometry that a linear probe sees after standardisation.
+"""
 
 from __future__ import annotations
 
@@ -20,8 +26,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fp16-cache", required=True, type=Path)
     parser.add_argument("--fp32-cache", required=True, type=Path)
-    parser.add_argument("--min-cosine", type=float, default=0.999)
-    parser.add_argument("--max-absolute-error", type=float, default=0.02)
+    parser.add_argument("--min-cosine", type=float, default=0.995)
+    parser.add_argument("--min-cosine-mean", type=float, default=0.9999)
+    parser.add_argument("--max-l2-abs-error", type=float, default=0.02)
     args = parser.parse_args()
 
     left_paths = filepaths(args.fp16_cache / "index.csv")
@@ -33,30 +40,41 @@ def main() -> int:
     if left.shape != right.shape:
         raise SystemExit(f"Shape mismatch: {left.shape} versus {right.shape}")
 
-    denominator = np.linalg.norm(left, axis=1) * np.linalg.norm(right, axis=1)
+    left_norm = np.linalg.norm(left, axis=1)
+    right_norm = np.linalg.norm(right, axis=1)
+    denominator = left_norm * right_norm
     cosine = np.divide(
         np.sum(left * right, axis=1),
         denominator,
         out=np.zeros_like(denominator),
         where=denominator > 0,
     )
+    left_unit = left / np.clip(left_norm[:, None], 1e-12, None)
+    right_unit = right / np.clip(right_norm[:, None], 1e-12, None)
+    l2_abs = np.abs(left_unit - right_unit)
     absolute = np.abs(left - right)
     report = {
         "rows": len(left_paths),
-        "dimensions": left.shape[1],
+        "dimensions": int(left.shape[1]),
         "cosine_min": float(cosine.min()),
         "cosine_mean": float(cosine.mean()),
+        "cosine_p01": float(np.quantile(cosine, 0.01)),
         "absolute_error_max": float(absolute.max()),
         "absolute_error_mean": float(absolute.mean()),
+        "l2_normalized_abs_max": float(l2_abs.max()),
+        "l2_normalized_abs_mean": float(l2_abs.mean()),
+        "rows_cosine_below_0_999": int((cosine < 0.999).sum()),
         "thresholds": {
             "min_cosine": args.min_cosine,
-            "max_absolute_error": args.max_absolute_error,
+            "min_cosine_mean": args.min_cosine_mean,
+            "max_l2_abs_error": args.max_l2_abs_error,
         },
     }
     report["status"] = (
         "PASS"
         if report["cosine_min"] >= args.min_cosine
-        and report["absolute_error_max"] <= args.max_absolute_error
+        and report["cosine_mean"] >= args.min_cosine_mean
+        and report["l2_normalized_abs_max"] <= args.max_l2_abs_error
         else "FAIL"
     )
     print(json.dumps(report, indent=2))

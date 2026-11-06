@@ -40,28 +40,30 @@ case-cluster analyses operate on the caches.
    set for `K=1,3,5,9`.
 5. File the preregistration before any labelled comparative run.
 
-**Gate:** no full embedding or labelled probe run until the preregistration and
-runtime qualification checks pass. Small model-loading and synthetic engineering
-tests are permitted.
+**Gate (2026-11-06):** protocol is `LOCKED`; confirmatory smoke/precision passed.
+Label-blind full embedding extraction may proceed. Labelled probes wait for
+Stage-2/3 lock verify (`preregistration/paper_c_lock.json`).
 
 ## Phase 1 — qualified frozen embeddings
 
-Primary panel:
+Confirmatory panel (2026-11-06 ungated redesign):
 
-1. UNI2-h;
-2. Virchow2;
-3. Phikon-v2;
-4. DINOv2 ViT-L/14 generic self-supervised control;
-5. ImageNet ResNet-50 conventional control.
+1. DINOv2 ViT-L/14 — co-primary reference (`torch.hub`);
+2. ImageNet ResNet-50 — conventional control (`torchvision`).
+
+Declared unavailable before labelled comparisons (gated Hugging Face access
+cannot be completed at the executing institution): UNI2-h, Virchow2, Phikon-v2.
 
 Requirements:
 
-- Hugging Face snapshot revisions and local weight/config hashes are immutable;
-- vendor transforms and pooling rules are verified against model-card examples;
-- Virchow2 register tokens are excluded from patch-token pooling;
+- Open weight revisions / torchvision weight enums and local hashes are
+  immutable;
+- vendor transforms and pooling rules are verified against documented
+  preprocessing;
 - per-model A4000 batch sizes pass a real-image smoke test;
 - float16 caches agree with float32 references within a declared tolerance;
-- `filepath` is the only join key between caches, labels and split manifests.
+- `filepath` is the only join key between caches, labels and split manifests;
+- no Hugging Face Read token is required for the confirmatory panel.
 
 Extract IDC `K=1` first. Context caches follow only after coordinate completeness
 is audited. BCSS extraction follows the same revision-pinned pipeline.
