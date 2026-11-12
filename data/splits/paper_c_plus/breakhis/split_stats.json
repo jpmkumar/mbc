@@ -1,0 +1,74 @@
+{
+  "paper": "C+",
+  "archive": "papers/paper_d/data/BreaKHis_v1.tar.gz",
+  "archive_sha256": "d118014cf8a58f6d1fc4571e55efb523c932c85cfba2fb05627e455fc40bd640",
+  "n_images": 7909,
+  "n_cases": 82,
+  "images_by_label": {
+    "malignant": 5429,
+    "benign": 2480
+  },
+  "images_by_magnification": {
+    "100X": 2081,
+    "200X": 2013,
+    "400X": 1820,
+    "40X": 1995
+  },
+  "n_splits": 5,
+  "seed": 32026,
+  "grouped_splitter": "StratifiedGroupKFold",
+  "random_splitter": "StratifiedKFold",
+  "group_unit": "case_id",
+  "magnification_rule": "pooled_all_mags_primary",
+  "fov_co_primary": false,
+  "fov_reason": "BreakHis public tiles lack neighbour coordinates",
+  "folds": [
+    {
+      "fold": 0,
+      "n_test_cases": 17,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1652,
+      "n_random_test_images": 1582
+    },
+    {
+      "fold": 1,
+      "n_test_cases": 17,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1600,
+      "n_random_test_images": 1582
+    },
+    {
+      "fold": 2,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 4,
+      "n_test_malignant_cases": 12,
+      "n_test_images": 1598,
+      "n_random_test_images": 1582
+    },
+    {
+      "fold": 3,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 11,
+      "n_test_images": 1495,
+      "n_random_test_images": 1582
+    },
+    {
+      "fold": 4,
+      "n_test_cases": 16,
+      "n_test_benign_cases": 5,
+      "n_test_malignant_cases": 11,
+      "n_test_images": 1564,
+      "n_random_test_images": 1581
+    }
+  ],
+  "paper_d_relation": {
+    "paper_d_seed": 42,
+    "paper_c_plus_seed": 32026,
+    "same_archive_sha256": true,
+    "note": "C+ uses a distinct seed so case folds differ from Paper D."
+  },
+  "manifest": "data/splits/paper_c_plus/breakhis/image_manifest.csv"
+}

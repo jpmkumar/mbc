@@ -1,0 +1,17 @@
+case_id,label,n_images
+SOB_B_A_14-22549CD,benign,132
+SOB_B_A_14-29960CD,benign,61
+SOB_B_F_14-29960AB,benign,68
+SOB_B_PT_14-21998AB,benign,235
+SOB_B_TA_14-13200,benign,65
+SOB_M_DC_14-11520,malignant,98
+SOB_M_DC_14-11951,malignant,100
+SOB_M_DC_14-15572,malignant,80
+SOB_M_DC_14-18650,malignant,108
+SOB_M_DC_14-4364,malignant,44
+SOB_M_DC_14-5695,malignant,90
+SOB_M_DC_14-8168,malignant,38
+SOB_M_MC_14-19979,malignant,98
+SOB_M_MC_14-19979C,malignant,62
+SOB_M_PC_14-12465,malignant,74
+SOB_M_PC_14-19440,malignant,142

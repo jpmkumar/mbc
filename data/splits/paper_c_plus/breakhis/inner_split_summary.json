@@ -1,0 +1,50 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "n_train": 49,
+      "n_val": 8,
+      "n_cal": 8,
+      "train_sha256": "a28b2a910c26b68ee0b3a84510d402833e3734272acd140c5fadeb950ee2ebb4",
+      "val_sha256": "5903855ef6bd64d4b1aabfec8b0cb356b5a0b2b843083448145bbf458b0c73b3",
+      "cal_sha256": "8799d2e6e859246b4f68bfbf4496b96c186e70720802023e64194c9223d12951"
+    },
+    {
+      "fold": 1,
+      "n_train": 49,
+      "n_val": 8,
+      "n_cal": 8,
+      "train_sha256": "5f41548ac307b066751cd4c53878e6ec1f05ec3e2b33a4e58eccb7ab4d238492",
+      "val_sha256": "70cb601ea9a40f31442b55440c12d7857a06015316f813b523cbf8198cac72ee",
+      "cal_sha256": "18fd49b6d4ffa8d8b61b9c94480d9fb2f78aec84bb26e95cdc2d62f329ef7659"
+    },
+    {
+      "fold": 2,
+      "n_train": 50,
+      "n_val": 8,
+      "n_cal": 8,
+      "train_sha256": "384a0cff4dbe5fc7375d7746a6aef1731e15a066dffa7d9febc41459b8522b7b",
+      "val_sha256": "3703dc8c988feb37c9c17e2abcaabbf20ef0562ab860c574fa51782bda9eff21",
+      "cal_sha256": "0bf811577c270a420647a8d22f7160f77a9096012a2dd544bc524b17d05e98d7"
+    },
+    {
+      "fold": 3,
+      "n_train": 50,
+      "n_val": 8,
+      "n_cal": 8,
+      "train_sha256": "5e7d28abea89d728b8fabc62782488b7f56ca9b8330af69198b144f1cf2b38b2",
+      "val_sha256": "88e29c1d4a9bf59a16a8eb2303673adcf403eedccd2f293fa5b6ea914a3534bc",
+      "cal_sha256": "5d8e05a17e0cd5654913384d962888e0fb01b2e380ff1747521896bdbdf0da08"
+    },
+    {
+      "fold": 4,
+      "n_train": 50,
+      "n_val": 8,
+      "n_cal": 8,
+      "train_sha256": "7b614ceeec64fc9df840f7decac246908c228aef21662aca388a053e3030a179",
+      "val_sha256": "2e6ebc0e621e948b0cd68065505a4abf1155a537380cc840785fd33524faf893",
+      "cal_sha256": "1fb756c3c2a641b143e650ef5479695f7547259eac39c42314c17f9e40560b93"
+    }
+  ],
+  "seed_base": 1042
+}
