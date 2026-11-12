@@ -151,5 +151,29 @@ confirmatory split is frozen.
 Immediate follow-on after Paper B submission: **Paper D (BreakHis)**.
 Paper C remains the classical evaluation/FOV track and is not displaced, but
 D is the highest-value QML follow-on because it reuses B's circuit family on a
-new estimand (domain shift) and answers SciRep's single-cohort limitation
-directly.
+new estimand (domain shift) and answers the single-cohort limitation of the
+Paper B study directly.
+
+## Amendment — T&F Connection Science secondaries (2026-09-22)
+
+**Status:** LOCKED amendment. Does **not** reopen the eight-qubit circuit
+family, co-primary estimands, SEI (0.01), Holm rule, or the four training
+arms. Venue primary for Paper D is now **Connection Science** (Taylor &
+Francis); see `papers/paper_d/VENUE.md` and `papers/paper_d/APC_GATE.md`.
+
+Ordered T&F secondaries (descriptive, uncorrected), run from frozen
+checkpoints / saved `test_predictions.npz` where possible:
+
+| ID | Experiment | Arms | Notes |
+|----|------------|------|-------|
+| **S1** | Per-magnification case-balanced AUPRC (40× / 100× / 200× / 400×) | All four | Align predictions to runtime `test.csv` row order |
+| **S2** | Calibration: ECE (15 equal-width bins) + reliability diagrams | **F-MLP**, **F-VQC** | Pooled held-out folds; report mean ECE ± fold std |
+| **S3** | Wall-clock (`train_time_s` from summaries) and trainable / total parameter counts | All four | Param counts from a single CPU instantiate of each head |
+| **S4** | IDC→BreakHis transfer (frozen Paper-B weights → BreakHis test) | Optional F-MLP vs F-VQC | Skip if compute blocks submit; not required for Connection Science filing |
+
+Export path: `papers/paper_d/scripts/export_tf_secondaries.py` →
+`papers/paper_d/results/tf_secondaries.json` and manuscript figures
+`fig03_per_magnification.*`, `fig04_reliability.*`.
+
+S4 remains optional. Do not invent IDC→BreakHis numbers without a declared
+run under this amendment.

@@ -71,12 +71,16 @@ lock; default: BACH is confirmatory secondary until sample-size note is done).
 - [x] Inner train/val/cal case lists (seed_base 1042)
 - [x] Implement `run_breakhis_mlp_cv.py` + embedding extract scripts
 - [x] Flip protocol to LOCKED + `paper_c_plus_lock.json`
-- [ ] Full embedding extract (both encoders) then labelled F-MLP probes
+- [x] Full embedding extract (both encoders) then labelled F-MLP probes
+- [x] Locked inference (seed-mean + 10k case bootstrap + Holm family=1)
 
 ### Phase 2 — labelled BreakHis probes
 
-- Random vs grouped **F-MLP**, seeds 42/43/44, seed-mean then case bootstrap
-- Secondaries: linear bridge, optional T-MLP, per-mag tables; no FOV arm
+- [x] Random vs grouped **F-MLP**, seeds 42/43/44, seed-mean then case bootstrap
+- [x] Secondaries: linear SGD bridge (DINOv2+ResNet); per-mag tables (F-MLP + linear)
+- [ ] Optional T-MLP (deferred — not required for BreakHis lock claim)
+- [x] Numbers in `results/curated_metrics.json`
+- [ ] Manuscript draft citing Paper C discovery + BreakHis replication
 
 ### Phase 3 — BACH (second cohort)
 
@@ -101,6 +105,6 @@ lock; default: BACH is confirmatory secondary until sample-size note is done).
 
 ## Immediate next actions
 
-1. Extract BreakHis DINOv2 + ResNet-50 embeddings on A4000.
-2. Run confirmatory F-MLP probes (random vs grouped, seeds 42/43/44).
-3. Locked inference → then BACH Phase 3.
+1. Draft BreakHis results section from `results/curated_metrics.json`.
+2. Optional T-MLP only if venue needs a fine-tune secondary.
+3. BACH Phase 3 (download + license + new lock appendix).

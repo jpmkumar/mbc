@@ -1,0 +1,64 @@
+{
+  "encoder": "dinov2_vitl14",
+  "head": "linear",
+  "contrast": "random_minus_grouped case_balanced_AUPRC",
+  "per_magnification": [
+    {
+      "magnification": "40X",
+      "difference": 0.06926437154878928,
+      "random_auprc": 0.9930127539707263,
+      "grouped_auprc": 0.923748382421937,
+      "ci_95": [
+        0.020694821036042633,
+        0.1428627804757603
+      ],
+      "two_sided_bootstrap_p": 0.0326967303269673,
+      "n_cases": 82,
+      "n_images": 1995,
+      "replicates": 10000
+    },
+    {
+      "magnification": "100X",
+      "difference": 0.05150357937491623,
+      "random_auprc": 0.9942480319705931,
+      "grouped_auprc": 0.9427444525956769,
+      "ci_95": [
+        0.010185493151450675,
+        0.12538352903957012
+      ],
+      "two_sided_bootstrap_p": 0.0694930506949305,
+      "n_cases": 82,
+      "n_images": 2081,
+      "replicates": 10000
+    },
+    {
+      "magnification": "200X",
+      "difference": 0.06042782657727719,
+      "random_auprc": 0.9877622588850294,
+      "grouped_auprc": 0.9273344323077523,
+      "ci_95": [
+        0.012907852238794587,
+        0.13784944657052942
+      ],
+      "two_sided_bootstrap_p": 0.056394360563943605,
+      "n_cases": 82,
+      "n_images": 2013,
+      "replicates": 10000
+    },
+    {
+      "magnification": "400X",
+      "difference": 0.05913987294201806,
+      "random_auprc": 0.9864098505884611,
+      "grouped_auprc": 0.927269977646443,
+      "ci_95": [
+        0.013266094442846191,
+        0.1362585476736649
+      ],
+      "two_sided_bootstrap_p": 0.0580941905809419,
+      "n_cases": 82,
+      "n_images": 1820,
+      "replicates": 10000
+    }
+  ],
+  "note": "Ordered secondary. Bootstrap resamples cases that contribute images at that magnification only."
+}

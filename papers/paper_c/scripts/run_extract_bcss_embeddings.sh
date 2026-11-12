@@ -20,10 +20,11 @@ TOKEN_FILE="${HF_TOKEN_FILE:-$PRIMARY_ROOT/hf_token}"
 CACHE_DIR="$PRIMARY_ROOT/cache"
 EMB_DIR="$PRIMARY_ROOT/embeddings"
 LOG_DIR="$PRIMARY_ROOT/logs"
-for path in "$BCSS_ROOT/images" "$BCSS_ROOT/provenance.json" "$MANIFEST" "$TOKEN_FILE"; do
+for path in "$BCSS_ROOT/images" "$BCSS_ROOT/provenance.json" "$MANIFEST"; do
   [[ -e "$path" ]] || { echo "Required artifact not found: $path" >&2; exit 1; }
 done
 mkdir -p "$CACHE_DIR" "$EMB_DIR" "$LOG_DIR"
+mkdir -p "$CACHE_DIR/torch" "$CACHE_DIR/torchinductor" "$CACHE_DIR/triton" "$CACHE_DIR/torchhub"
 DATASET_SHA="$(python3 - "$BCSS_ROOT/provenance.json" <<'PY'
 import json, sys
 print(json.load(open(sys.argv[1]))["materialized_tree_sha256"])
@@ -31,22 +32,42 @@ PY
 )"
 RUN_LOG="$LOG_DIR/paperc_bcss_${ENCODER}_${CONTEXT}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
+DOCKER_MOUNTS=(
+  --mount type=bind,src="$BCSS_ROOT/images",dst=/datasets/bcss/images,readonly
+  --mount type=bind,src="$MANIFEST",dst=/datasets/bcss/centres.csv,readonly
+  --mount type=bind,src="$CACHE_DIR",dst=/cache
+  --mount type=bind,src="$EMB_DIR",dst=/outputs
+  --mount type=bind,src="$ROOT/papers/paper_c",dst=/opt/mbc/papers/paper_c,readonly
+)
+INNER_PREFIX='exec'
+if [[ -f "$TOKEN_FILE" ]]; then
+  DOCKER_MOUNTS+=(--mount type=bind,src="$TOKEN_FILE",dst=/run/secrets/hf_token,readonly)
+  INNER_PREFIX='export HF_TOKEN="$(< /run/secrets/hf_token)"; exec'
+else
+  echo "No HF token file; confirmatory panel does not require one ($ENCODER)" >&2
+fi
+
 docker run --rm \
   --gpus device=0 \
   --user "$(id -u):$(id -g)" \
-  --env HOME=/tmp --env HF_HOME=/cache/huggingface \
+  --env USER=mbc \
+  --env LOGNAME=mbc \
+  --env HOME=/tmp \
+  --env XDG_CACHE_HOME=/cache \
+  --env TORCH_HOME=/cache/torch \
+  --env HF_HOME=/cache/huggingface \
+  --env TORCHINDUCTOR_CACHE_DIR=/cache/torchinductor \
+  --env TRITON_CACHE_DIR=/cache/triton \
   --env "MBC_GIT_COMMIT=$MBC_GIT_COMMIT" \
   --env "MBC_IMAGE_ID=$MBC_IMAGE_ID" \
   --env "MBC_ENV_LOCK_SHA=$MBC_ENV_LOCK_SHA" \
   --env "MBC_DATASET_SHA=$DATASET_SHA" \
   --shm-size=16g \
-  --mount type=bind,src="$BCSS_ROOT/images",dst=/datasets/bcss/images,readonly \
-  --mount type=bind,src="$MANIFEST",dst=/datasets/bcss/centres.csv,readonly \
-  --mount type=bind,src="$TOKEN_FILE",dst=/run/secrets/hf_token,readonly \
-  --mount type=bind,src="$CACHE_DIR",dst=/cache \
-  --mount type=bind,src="$EMB_DIR",dst=/outputs \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  "${DOCKER_MOUNTS[@]}" \
   "$MBC_IMAGE" \
-  bash -lc 'export HF_TOKEN="$(< /run/secrets/hf_token)"; exec python papers/paper_c/scripts/extract_bcss_embeddings.py "$@"' -- \
+  bash -lc "$INNER_PREFIX"' python papers/paper_c/scripts/extract_bcss_embeddings.py "$@"' -- \
     --encoder "$ENCODER" \
     --context "$CONTEXT" \
     --images /datasets/bcss/images \

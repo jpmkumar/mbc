@@ -11,6 +11,10 @@ stride-150; IDC/BCSS manifests are frozen. Label-blind IDC `K=1` extraction may
 run. Do **not** run labelled probes until `preregistration/paper_c_lock.json`
 passes `verify_paperc_lock.py`.
 
+**ntfy:** same topic file as Path A / Paper D — `~/.config/mbc/ntfy_topic`.
+Live embedding runs: `papers/paper_c/scripts/watch_paperc_ntfy.sh` (shards,
+START/DONE, cache verify, failures).
+
 **Ungated redesign:** UNI2-h, Virchow2 and Phikon-v2 are declared unavailable
 (institutional Hugging Face gated access cannot be completed). No Hugging Face
 Read token is required for the confirmatory panel. Weights load from `torch.hub`

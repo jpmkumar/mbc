@@ -12,57 +12,48 @@ entanglement). "No gain under shift" is pre-allowed.
 
 **Primary cohort:** BreakHis, all four magnifications as strata, case-ID CV.
 
+**Venue (locked 2026-09-22):** **Connection Science** (Taylor \& Francis).
+See [`VENUE.md`](VENUE.md) and [`APC_GATE.md`](APC_GATE.md).
+
 **Compute:** campus RTX A4000 (preferred) or Kaggle T4; environment must be
 recorded in the lock manifest before labelled runs.
 
 ---
 
-## Phase 0 — folder and protocol (complete at declaration)
+## Phase 0 — folder and protocol (complete)
 
 1. Create `papers/paper_d/` as the Mac + GitHub workspace.
 2. Lock series priority: D is the immediate QML follow-on after B submit.
 3. File [`preregistration/paper_d_breakhis_protocol.md`](../../preregistration/paper_d_breakhis_protocol.md).
 
-**Gate:** no labelled BreakHis comparison until Phase 1 lock digests exist.
+## Phase 1 — data and lock (complete)
 
-## Phase 1 — data and lock
+Lock verify passes; confirmatory cells trained.
 
-1. Obtain BreakHis; record archive SHA-256.
-2. Audit case / patient identifiers; build case-ID five-fold (or declared *k*)
-   manifests under `data/splits/breakhis/`. Commit case lists only.
-3. Freeze `config/circuit_registry.json` to Paper B's 8q / E2b-matched specs.
-4. Run `python papers/paper_d/scripts/write_paperd_lock.py` →
-   `preregistration/paper_d_lock.json`.
-5. Verify with `python papers/paper_d/scripts/verify_paperd_lock.py`.
+## Phase 2 — confirmatory cells (complete)
 
-**Gate:** lock verify passes; protocol status remains LOCKED; no test-fold
-scores inspected.
+All 20 cells under `results/breakhis_paper_d/`. Curated:
+`papers/paper_d/results/curated_metrics.json`.
 
-## Phase 2 — confirmatory cells
+## Phase 3 — T&F secondaries (complete 2026-09-22)
 
-Extract slides (local):
+Protocol amendment dated 2026-09-22. Exporter:
+`papers/paper_d/scripts/export_tf_secondaries.py` →
+`papers/paper_d/results/tf_secondaries.json`.
 
-```bash
-tar -xzf papers/paper_d/data/BreaKHis_v1.tar.gz -C papers/paper_d/data
-```
+| ID | Status |
+|----|--------|
+| S1 per-magnification | **Done** — fig03 |
+| S2 calibration ECE | **Done** — F-MLP ECE 0.135±0.043; F-VQC 0.228±0.082; fig04 |
+| S3 wall-clock / params | **Done** — in `tf_secondaries.json` |
+| S4 IDC→BreakHis | **Skipped** (optional) |
 
-Run all four arms on every committed fold via
-`papers/paper_d/scripts/run_breakhis_queue.sh`:
+Co-primary (unchanged): frozen Δ −0.0085, CI [−0.034, +0.017], Holm *p* = 0.80;
+fine-tune Δ +0.0000, CI [−0.027, +0.027], Holm *p* = 0.997.
 
-| ID | Regime | Head |
-|----|--------|------|
-| F-MLP | Frozen backbone | E2b-matched MLP |
-| F-VQC | Frozen backbone | Paper-B VQC |
-| T-MLP | Last-block fine-tune | E2b-matched MLP |
-| T-VQC | Last-block fine-tune | Paper-B VQC |
+## Phase 4 — manuscript and submit
 
-Promote only curated summaries into `papers/paper_d/results/` (selective track,
-same pattern as Paper B/C). Raw logs stay in root `results/breakhis_paper_d/`.
-
-## Phase 3 — analysis and manuscript
-
-1. Co-primary Δ under frozen and fine-tune regimes; Holm at 0.05; SEI ±0.01
-   AUPRC.
-2. Ordered secondaries per protocol (per-mag, IDC→BreakHis, calibration).
-3. Draft manuscript locally under `manuscript/` (not pushed). Tag `paper-d-v1.0`
-   when code + curated metrics match the submission.
+1. Manuscript: `manuscript/main.tex` (Connection Science / T\&F framing).
+2. Checklist: [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md).
+3. Tag `paper-d-tf-v1.0` when PDF matches curated JSON.
+4. Turnitin (similarity + AI) → IQAC → submit `ccos20`.

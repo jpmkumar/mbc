@@ -1,0 +1,42 @@
+{
+  "method": "Holm step-down, family size 1 (FOV not co-primary on BreakHis)",
+  "alpha": 0.05,
+  "ordered_hypotheses": [
+    "protocol_optimism"
+  ],
+  "results": {
+    "protocol_optimism": {
+      "raw_p": 0.048995100489951,
+      "holm_adjusted_p": 0.048995100489951,
+      "reject_at_0.05": true,
+      "difference": 0.05719923499663504,
+      "ci_95_percentile": [
+        0.015321479337343574,
+        0.1283202760926113
+      ],
+      "left_estimate": 0.9971046567279387,
+      "right_estimate": 0.9399054217313036
+    }
+  },
+  "secondary_resnet50_fmlp_delta": {
+    "metric": "case_balanced_auprc",
+    "contrast": "random-fmlp - grouped-fmlp",
+    "left_estimate": 0.987933474346313,
+    "right_estimate": 0.9439884789680197,
+    "difference": 0.04394499537829322,
+    "ci_95_percentile": [
+      0.0154064536292855,
+      0.08656486891664877
+    ],
+    "two_sided_bootstrap_p": 0.022397760223977603,
+    "p_value_method": "two-sided centred case bootstrap with +1 finite-replicate correction",
+    "replicates": 10000,
+    "seed": 52027,
+    "case_identifiers": 82,
+    "strata_column": null,
+    "strata_count": 1,
+    "rows": 7909,
+    "left_sha256": "8b81a927885f6235ff25d54a9b07cfb3befe51ce40ab350230f72ff87cfa0009",
+    "right_sha256": "3af2f06a15347349b59e9256ba317a8030e859977724f79af4dcfb92be92576e"
+  }
+}

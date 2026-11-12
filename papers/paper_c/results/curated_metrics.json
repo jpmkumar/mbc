@@ -1,0 +1,101 @@
+{
+  "paper": "C",
+  "locked_utc": "2026-11-11T05:51:00Z",
+  "stage1_commit": "f5cc597e8989a1164db771b18b1ef68d57f1d1d9",
+  "co_primary": {
+    "protocol_optimism": {
+      "encoder": "dinov2_vitl14",
+      "contrast": "random-k1 - grouped-k1",
+      "metric": "case_balanced_auprc",
+      "left_estimate": 0.8732293904305773,
+      "right_estimate": 0.8497571955578018,
+      "difference": 0.02347219487277552,
+      "ci_95_percentile": [0.015206516570592899, 0.0331723241217352],
+      "raw_p": 9.999000099990002e-05,
+      "holm_adjusted_p": 0.00019998000199980003,
+      "reject_at_0.05": true,
+      "case_identifiers": 279,
+      "rows": 277524,
+      "replicates": 10000
+    },
+    "context_gain": {
+      "encoder": "dinov2_vitl14",
+      "contrast": "grouped-k9 - grouped-k1",
+      "population": "complete_k9_centres",
+      "metric": "case_balanced_auprc",
+      "left_estimate": 0.9211598204842308,
+      "right_estimate": 0.9268139786623406,
+      "difference": -0.005654158178109769,
+      "ci_95_percentile": [-0.019667387774913492, 0.007352199284128475],
+      "raw_p": 0.404959504049595,
+      "holm_adjusted_p": 0.404959504049595,
+      "reject_at_0.05": false,
+      "case_identifiers": 216,
+      "rows": 49798,
+      "replicates": 10000
+    }
+  },
+  "secondary": {
+    "protocol_bundled": {
+      "difference": 0.01919425994201185,
+      "ci_95_percentile": [0.011544547708637703, 0.028815266231394444],
+      "two_sided_bootstrap_p": 0.00029997000299970003
+    },
+    "bcss_dinov2_k9_minus_k1": {
+      "difference": 0.005130679592072029,
+      "ci_95_percentile": [-0.012990874188022755, 0.02199630129471575],
+      "two_sided_bootstrap_p": 0.5558444155584441,
+      "case_identifiers": 45,
+      "test_rows": 19400
+    },
+    "bcss_resnet50_k9_minus_k1": {
+      "difference": 0.042227167813163935,
+      "ci_95_percentile": [0.014939886887742983, 0.06974048182849318],
+      "two_sided_bootstrap_p": 0.0024997500249975004,
+      "case_identifiers": 45,
+      "test_rows": 19400
+    },
+    "idc_k1_seed_mean_auprc": {
+      "dinov2_vitl14": {
+        "random_k1": 0.8719,
+        "grouped_k1": 0.8468,
+        "random_k1_bundled": 0.8676
+      },
+      "resnet50": {
+        "random_k1": 0.8396,
+        "grouped_k1": 0.8172,
+        "random_k1_bundled": 0.8396
+      }
+    },
+    "idc_complete_k9_seed_mean_auprc": {
+      "dinov2_vitl14": {
+        "upsample224": 0.9250,
+        "mosaic3": 0.9397,
+        "mosaic5": 0.9384,
+        "mosaic9": 0.9196
+      },
+      "resnet50": {
+        "upsample224": 0.9054,
+        "mosaic3": 0.9333,
+        "mosaic5": 0.9297,
+        "mosaic9": 0.9052
+      }
+    },
+    "rank_stability_random_vs_grouped": {
+      "kendall_tau": 1.0,
+      "dinov2_rank": 1,
+      "resnet50_rank": 2
+    },
+    "reliability_dinov2_grouped_k1": {
+      "calibration_intercept": -0.008153966422346101,
+      "calibration_slope": 0.9956971607844395,
+      "case_balanced_brier": 0.09676253658714819,
+      "case_balanced_log_loss": 0.3165555493401225
+    }
+  },
+  "sources": {
+    "delta_protocol": "papers/paper_c/results/locked_inference/delta_protocol.json",
+    "delta_context": "papers/paper_c/results/locked_inference/delta_context.json",
+    "coprimary_holm": "papers/paper_c/results/locked_inference/coprimary_holm.json"
+  }
+}

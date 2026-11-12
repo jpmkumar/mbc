@@ -1,0 +1,157 @@
+{
+  "paper": "C+",
+  "cohort": "BreakHis",
+  "confirmatory_head": "F-MLP",
+  "co_primary": {
+    "estimand": "delta_protocol_dinov2_fmlp",
+    "definition": "random_minus_grouped case_balanced_AUPRC",
+    "difference": 0.05719923499663504,
+    "grouped_auprc": 0.9399054217313036,
+    "random_auprc": 0.9971046567279387,
+    "ci_95": [
+      0.015321479337343574,
+      0.1283202760926113
+    ],
+    "holm_adjusted_p": 0.048995100489951,
+    "reject_at_0.05": true,
+    "family_size": 1,
+    "fov_co_primary": false
+  },
+  "secondaries": {
+    "resnet50_fmlp": {
+      "difference": 0.04394499537829322,
+      "grouped_auprc": 0.9439884789680197,
+      "random_auprc": 0.987933474346313,
+      "ci_95": [
+        0.0154064536292855,
+        0.08656486891664877
+      ],
+      "two_sided_bootstrap_p": 0.022397760223977603
+    },
+    "dinov2_linear": {
+      "difference": 0.060676861242242364,
+      "grouped_auprc": 0.9298533865117771,
+      "random_auprc": 0.9905302477540194,
+      "ci_95": [
+        0.015960189153857763,
+        0.13730967203484143
+      ],
+      "two_sided_bootstrap_p": 0.0522947705229477
+    },
+    "resnet50_linear": {
+      "difference": 0.044160762525994546,
+      "grouped_auprc": 0.9335063031569066,
+      "random_auprc": 0.9776670656829012,
+      "ci_95": [
+        0.014635266908432148,
+        0.08957639625766241
+      ],
+      "two_sided_bootstrap_p": 0.027997200279972004
+    },
+    "per_magnification_dinov2_fmlp": [
+      {
+        "magnification": "40X",
+        "difference": 0.04856155479974966,
+        "grouped_auprc": 0.9493888982475658,
+        "random_auprc": 0.9979504530473154,
+        "ci_95": [
+          0.012488544896908356,
+          0.10705697665265082
+        ],
+        "two_sided_bootstrap_p": 0.0466953304669533,
+        "n_images": 1995
+      },
+      {
+        "magnification": "100X",
+        "difference": 0.0485662583731965,
+        "grouped_auprc": 0.9489677158164005,
+        "random_auprc": 0.997533974189597,
+        "ci_95": [
+          0.01109016385355723,
+          0.11357865530777678
+        ],
+        "two_sided_bootstrap_p": 0.05849415058494151,
+        "n_images": 2081
+      },
+      {
+        "magnification": "200X",
+        "difference": 0.05978539221904111,
+        "grouped_auprc": 0.9372488401912271,
+        "random_auprc": 0.9970342324102682,
+        "ci_95": [
+          0.016318793381045638,
+          0.13026299265000987
+        ],
+        "two_sided_bootstrap_p": 0.044995500449955005,
+        "n_images": 2013
+      },
+      {
+        "magnification": "400X",
+        "difference": 0.07121201955824885,
+        "grouped_auprc": 0.9234710227560399,
+        "random_auprc": 0.9946830423142887,
+        "ci_95": [
+          0.019910859729758403,
+          0.15376292123909516
+        ],
+        "two_sided_bootstrap_p": 0.042195780421957804,
+        "n_images": 1820
+      }
+    ],
+    "per_magnification_dinov2_linear": [
+      {
+        "magnification": "40X",
+        "difference": 0.06926437154878928,
+        "grouped_auprc": 0.923748382421937,
+        "random_auprc": 0.9930127539707263,
+        "ci_95": [
+          0.020694821036042633,
+          0.1428627804757603
+        ],
+        "two_sided_bootstrap_p": 0.0326967303269673,
+        "n_images": 1995
+      },
+      {
+        "magnification": "100X",
+        "difference": 0.05150357937491623,
+        "grouped_auprc": 0.9427444525956769,
+        "random_auprc": 0.9942480319705931,
+        "ci_95": [
+          0.010185493151450675,
+          0.12538352903957012
+        ],
+        "two_sided_bootstrap_p": 0.0694930506949305,
+        "n_images": 2081
+      },
+      {
+        "magnification": "200X",
+        "difference": 0.06042782657727719,
+        "grouped_auprc": 0.9273344323077523,
+        "random_auprc": 0.9877622588850294,
+        "ci_95": [
+          0.012907852238794587,
+          0.13784944657052942
+        ],
+        "two_sided_bootstrap_p": 0.056394360563943605,
+        "n_images": 2013
+      },
+      {
+        "magnification": "400X",
+        "difference": 0.05913987294201806,
+        "grouped_auprc": 0.927269977646443,
+        "random_auprc": 0.9864098505884611,
+        "ci_95": [
+          0.013266094442846191,
+          0.1362585476736649
+        ],
+        "two_sided_bootstrap_p": 0.0580941905809419,
+        "n_images": 1820
+      }
+    ],
+    "t_mlp": "deferred (ordered secondary; not required for BreakHis lock claim)"
+  },
+  "locks": {
+    "stage1_commit": "c39c447e803b8050f1dd48179284015baad198a2",
+    "stage2_commit": "20a3b38a6438a859ba1a338964f23e4004784960"
+  }
+}

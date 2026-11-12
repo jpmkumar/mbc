@@ -125,6 +125,7 @@ papers/paper_b/assets/
 papers/paper_b/archive/
 # Scientific Reports conversion, kept local like the other manuscript trees.
 papers/paper_b/manuscript_sr/
+papers/paper_b/manuscript_tf/
 papers/paper_b/submission/
 papers/paper_b/**/*.docx
 papers/paper_b/**/*.pdf
@@ -143,7 +144,30 @@ papers/paper_c/results/*
 !papers/paper_c/results/idc_context_audit.md
 !papers/paper_c/results/pipeline_qualification.md
 !papers/paper_c/results/precision_simulation.md
+!papers/paper_c/results/curated_metrics.json
+!papers/paper_c/results/README.md
 papers/paper_c/assets/
+# Paper C+ BreakHis follow-up — curated metrics + lock inference only.
+papers/paper_c_plus/results/
+!papers/paper_c_plus/results/
+papers/paper_c_plus/results/*
+!papers/paper_c_plus/results/curated_metrics.json
+!papers/paper_c_plus/results/coprimary_holm.json
+!papers/paper_c_plus/results/delta_protocol_*.json
+!papers/paper_c_plus/results/per_mag_*.json
+!papers/paper_c_plus/results/README.md
+papers/paper_c_plus/assets/
+papers/paper_c_plus/**/*.docx
+papers/paper_c_plus/**/*.pdf
+# Venue/submission drafts stay local (cover letters, APC notes, venue scorecards).
+papers/*/COVER_LETTER*.md
+papers/*/APC_GATE.md
+papers/*/VENUE_*.md
+papers/*/*_SUBMISSION_CHECKLIST.md
+papers/*/SCIENTIFIC_REPORTS_SUBMISSION_CHECKLIST.md
+papers/*/TF_SUBMISSION_CHECKLIST.md
+papers/*/scripts/build_supervisor_docx.sh
+papers/*/scripts/build_tf_docx.sh
 papers/paper_c/scripts/crossref_verified.bib
 papers/paper_c/**/*.docx
 papers/paper_c/manuscript/*.aux
@@ -157,6 +181,8 @@ papers/paper_d/results/
 papers/paper_d/results/*
 !papers/paper_d/results/README.md
 !papers/paper_d/results/breakhis_archive_audit.md
+!papers/paper_d/results/curated_metrics.json
+!papers/paper_d/results/tf_secondaries.json
 # BreakHis archive and extracted slides — local only (~4GB+).
 papers/paper_d/data/**
 !papers/paper_d/data/README.md

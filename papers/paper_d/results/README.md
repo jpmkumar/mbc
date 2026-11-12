@@ -1,8 +1,18 @@
 # Paper D curated results
 
-Raw GPU runs live under the repository-root `results/` tree (gitignored).
+Raw GPU runs: repository-root `results/breakhis_paper_d/` (gitignored).
 
-Promote here only named, reviewer-facing summaries after the confirmatory
-matrix is complete (same selective-track pattern as Papers B and C).
+| File | Contents |
+|------|----------|
+| `curated_metrics.json` | Co-primary four-arm AUPRC, paired Δ, Holm |
+| `tf_secondaries.json` | S1 per-mag, S2 ECE/reliability, S3 wall-clock/params |
+| `breakhis_archive_audit.md` | Archive audit notes |
 
-Until Phase 2 finishes, this directory holds only this README.
+Regenerate:
+
+```bash
+python papers/paper_d/scripts/export_curated_metrics.py
+python papers/paper_d/scripts/export_tf_secondaries.py
+```
+
+Figures land in `manuscript/figures/` (fig01–fig04).

@@ -1,0 +1,21 @@
+{
+  "metric": "case_balanced_auprc",
+  "contrast": "random-linear - grouped-linear",
+  "left_estimate": 0.9776670656829012,
+  "right_estimate": 0.9335063031569066,
+  "difference": 0.044160762525994546,
+  "ci_95_percentile": [
+    0.014635266908432148,
+    0.08957639625766241
+  ],
+  "two_sided_bootstrap_p": 0.027997200279972004,
+  "p_value_method": "two-sided centred case bootstrap with +1 finite-replicate correction",
+  "replicates": 10000,
+  "seed": 52029,
+  "case_identifiers": 82,
+  "strata_column": null,
+  "strata_count": 1,
+  "rows": 7909,
+  "left_sha256": "88d4988bc77ec622d18a2c9508b9aae83dfc75d528ac731742247848cfaf274f",
+  "right_sha256": "0027aee510cecad0800e4006edf7b0adad0cafd636cc8466f97353045e05a2d2"
+}

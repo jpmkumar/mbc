@@ -40,9 +40,15 @@ case-cluster analyses operate on the caches.
    set for `K=1,3,5,9`.
 5. File the preregistration before any labelled comparative run.
 
-**Gate (2026-11-06):** protocol is `LOCKED`; confirmatory smoke/precision passed.
-Label-blind full embedding extraction may proceed. Labelled probes wait for
-Stage-2/3 lock verify (`preregistration/paper_c_lock.json`).
+**Gate (2026-11-11):** locked inference complete. Co-primary protocol optimism
+confirmed (DINOv2 Δ=+0.0235, Holm p=0.00020); FOV context gain not rejected
+(DINOv2 Δ=−0.0057, Holm p=0.405). Manuscript results filled from
+`papers/paper_c/results/curated_metrics.json`.
+
+**Follow-up (do not amend this lock):** multi-cohort protocol replication is
+**Paper C+** — see [`../paper_c_plus/PLAN.md`](../paper_c_plus/PLAN.md) and
+`preregistration/paper_c_plus_protocol.md` (BreakHis then BACH; FOV not
+re-estimable on BreakHis tiles).
 
 ## Phase 1 — qualified frozen embeddings
 

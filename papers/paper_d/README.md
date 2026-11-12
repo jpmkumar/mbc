@@ -41,7 +41,10 @@ bake-off; the estimand is domain shift with the same circuit family as Paper B.
 | `../../data/splits/breakhis/` | yes (case lists) | Case-ID folds; freeze before lock |
 | `../../preregistration/paper_d_breakhis_protocol.md` | yes | Binding protocol |
 | `../../preregistration/paper_d_lock.json` | yes (after Stage 2) | External lock manifest |
-| `manuscript/` | **no** | Local authoring only |
+| `manuscript/` | **no** | Local Connection Science draft (`main.tex`, figures) |
+| [`VENUE.md`](VENUE.md) | yes | Connection Science primary; AAI backup |
+| [`APC_GATE.md`](APC_GATE.md) | yes | VIT APC / JCR gate for Connection Science |
+| [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) | yes | WoS, Turnitin, portal steps |
 | Raw GPU logs | **no** | Root `results/` (gitignored) |
 
 ## Scope
@@ -73,6 +76,19 @@ papers/paper_d/scripts/run_breakhis_queue.sh --dry-run
 ```
 
 Artifacts: `results/breakhis_paper_d/fold{N}_{arm}/` (gitignored).
+
+Curated five-fold export and figures:
+
+```bash
+python3 papers/paper_d/scripts/export_curated_metrics.py
+python3 papers/paper_d/scripts/export_tf_secondaries.py
+python3 papers/paper_d/scripts/plot_paper_d_figures.py
+make -C papers/paper_d/manuscript
+```
+
+The PDF is a **Connection Science** draft. Co-primary cells and T\&F
+secondaries S1–S3 are complete; optional S4 (IDC→BreakHis) was skipped.
+See [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) before portal upload.
 
 ## Relation to other papers
 
