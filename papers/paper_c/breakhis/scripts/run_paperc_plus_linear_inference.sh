@@ -67,7 +67,7 @@ boot delta_protocol_resnet50_linear \
   "$RES/resnet50/linear-grouped/seed_mean_predictions.csv" \
   52029
 
-"$PYTHON" papers/paper_c_plus/scripts/summarize_breakhis_per_mag.py \
+"$PYTHON" papers/paper_c/breakhis/scripts/summarize_breakhis_per_mag.py \
   --encoder dinov2_vitl14 --head linear \
   --output "$INF/per_mag_dinov2_linear.json" || true
 

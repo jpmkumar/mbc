@@ -18,7 +18,7 @@ from pathlib import Path
 
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_ARCHIVE = ROOT / "papers" / "paper_d" / "data" / "BreaKHis_v1.tar.gz"
 OUT_DIR = ROOT / "data" / "splits" / "paper_c_plus" / "breakhis"
 EXPECTED_SHA256 = (

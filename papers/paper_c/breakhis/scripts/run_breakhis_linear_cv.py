@@ -16,7 +16,7 @@ from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.class_weight import compute_sample_weight
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 import sys
 
 sys.path.insert(0, str(ROOT / "papers" / "paper_c" / "scripts"))

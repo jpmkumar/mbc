@@ -10,7 +10,7 @@ import json
 import random
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_OUTER = ROOT / "data" / "splits" / "paper_c_plus" / "breakhis"
 
 

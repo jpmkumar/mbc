@@ -47,7 +47,7 @@ docker run --rm \
   --mount type=bind,src="$ROOT",dst=/opt/mbc,readonly \
   -w /opt/mbc \
   "$MBC_IMAGE" \
-  python papers/paper_c_plus/scripts/extract_breakhis_embeddings.py \
+  python papers/paper_c/breakhis/scripts/extract_breakhis_embeddings.py \
     --encoder "$ENCODER" \
     --extracted-root /data/breakhis \
     --manifest /opt/mbc/data/splits/paper_c_plus/breakhis/image_manifest.csv \

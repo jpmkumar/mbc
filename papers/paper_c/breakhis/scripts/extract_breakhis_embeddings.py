@@ -17,7 +17,7 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "papers" / "paper_c" / "scripts"))
 
 from extract_embeddings import load_encoder, registry_entry, sha256  # noqa: E402

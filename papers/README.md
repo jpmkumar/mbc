@@ -9,8 +9,7 @@ excluded from those releases).
 |-------|---------------------------|---------------|
 | **A** | https://github.com/jpmkumar/mbc-paper-a | [`paper_a/`](paper_a/) |
 | **B** | https://github.com/jpmkumar/mbc-paper-b | [`paper_b/`](paper_b/) |
-| **C** | https://github.com/jpmkumar/mbc-paper-c | [`paper_c/`](paper_c/) |
-| **C+** | https://github.com/jpmkumar/mbc-paper-c-plus | [`paper_c_plus/`](paper_c_plus/) |
+| **C** (incl. former C+) | https://github.com/jpmkumar/mbc-paper-c | [`paper_c/`](paper_c/) (+ [`paper_c/breakhis/`](paper_c/breakhis/)) |
 | **D** | https://github.com/jpmkumar/mbc-paper-d | [`paper_d/`](paper_d/) |
 
 **Monorepo:** https://github.com/jpmkumar/mbc
@@ -20,8 +19,9 @@ answer different questions: **B** asks whether a hybrid quantum stage helps;
 **C** asks whether random-patch CV overestimates case-grouped performance and
 whether FOV helps under frozen DINOv2/ResNet. Paper C is classical-only.
 
-**Paper C+** replicates the protocol-optimism contrast on BreakHis with a
-confirmatory frozen-encoder F-MLP (FOV not co-primary on BreakHis tiles).
+**Paper C Stage 2** (formerly a separate “C+” folder) replicates protocol
+optimism on BreakHis with a confirmatory F-MLP; code lives in
+[`paper_c/breakhis/`](paper_c/breakhis/).
 
 **Paper D (BreakHis)** uses the same circuit family as B under case-ID CV.
 Preregistration:
@@ -40,12 +40,12 @@ git push origin paper-b-v1.0
 
 ## Scope summary
 
-| | Paper A | Paper B | Paper C | Paper C+ | Paper D |
-|---|---------|---------|---------|----------|---------|
-| **Folder** | [`paper_a/`](paper_a/) | [`paper_b/`](paper_b/) | [`paper_c/`](paper_c/) | [`paper_c_plus/`](paper_c_plus/) | [`paper_d/`](paper_d/) |
-| **Data** | Wisconsin (tabular) | Kaggle IDC | IDC + BCSS | BreakHis | BreakHis |
-| **Question** | Hybrid QML on tabular | Does the quantum stage help? | Protocol optimism / FOV | Does optimism replicate? | Does B's VQC transfer? |
-| **Quantum** | yes | yes | **no** | **no** | yes |
+| | Paper A | Paper B | Paper C | Paper D |
+|---|---------|---------|---------|---------|
+| **Folder** | [`paper_a/`](paper_a/) | [`paper_b/`](paper_b/) | [`paper_c/`](paper_c/) (+ BreakHis stage) | [`paper_d/`](paper_d/) |
+| **Data** | Wisconsin (tabular) | Kaggle IDC | IDC + BCSS + BreakHis | BreakHis |
+| **Question** | Hybrid QML on tabular | Does the quantum stage help? | Protocol optimism / FOV + BreakHis replication | Does B's VQC transfer? |
+| **Quantum** | yes | yes | **no** | yes |
 
 Manuscript sources, venue drafts, and AI-assistant notes stay local and are not
 pushed to GitHub.

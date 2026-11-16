@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 PROTOCOL = ROOT / "preregistration" / "paper_c_plus_protocol.md"
 SPLITS = ROOT / "data" / "splits" / "paper_c_plus" / "breakhis"
 OUT = ROOT / "preregistration" / "paper_c_plus_lock.json"

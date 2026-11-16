@@ -80,16 +80,22 @@ lock; default: BACH is confirmatory secondary until sample-size note is done).
 - [x] Secondaries: linear SGD bridge (DINOv2+ResNet); per-mag tables (F-MLP + linear)
 - [ ] Optional T-MLP (deferred — not required for BreakHis lock claim)
 - [x] Numbers in `results/curated_metrics.json`
-- [ ] Manuscript draft citing Paper C discovery + BreakHis replication
+- [x] Manuscript draft: `manuscript/main.tex` (local; cites Paper C + BreakHis lock)
 
 ### Phase 3 — BACH (second cohort)
 
 - Download + license check; new lock appendix; protocol optimism replication
 
-### Phase 4 — manuscript
+### Phase 4 — manuscript polish / venue
 
-- Cite Paper C as discovery; report BreakHis/BACH replication honestly
-- Venue: VIT APC rules (Q1/Q2; Gold OA or hybrid IF>5; not MDPI/SAGE/Hindawi/IoP)
+- **Target venue:** Wiley *Engineering Reports* (Gold OA; provisional JCR Q2 Engineering, Multidisciplinary; APC ~USD 2,500). See `manuscript/VENUE_ENGINEERING_REPORTS.md`.
+- **Scope:** **one paper** = locked IDC/BCSS (Paper C) + BreakHis replication (C+); not two submissions.
+- [x] Combined Eng.\ Reports draft (`manuscript/main.tex` + `main.docx` + cover letter)
+- [ ] Confirm Q2 on WoS via `egateway.vit.ac.in` before IQAC/APC claim
+- [ ] Author block + ORCID; Paper C DOI/preprint once available
+- [ ] Optional forest-plot figure; expand refs; Word/PDF export for Free Format
+- [ ] Turnitin (similarity + AI) → IQAC; VIT faculty corresponding author
+- [ ] BACH only if we choose to enlarge scope before first submission
 
 ---
 
@@ -105,6 +111,7 @@ lock; default: BACH is confirmatory secondary until sample-size note is done).
 
 ## Immediate next actions
 
-1. Draft BreakHis results section from `results/curated_metrics.json`.
-2. Optional T-MLP only if venue needs a fine-tune secondary.
-3. BACH Phase 3 (download + license + new lock appendix).
+1. Verify *Engineering Reports* Q2 on WoS (egateway) and screenshot for APC file.
+2. Fill author block / ORCID / corresponding `@vit.ac.in` in `manuscript/main.tex`.
+3. Export PDF/Word, run Turnitin (similarity + AI), then submit Free Format + cover letter.
+4. Optional: Short Communication (≤4k words; lower APC) if editors prefer a compact replication.
