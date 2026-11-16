@@ -23,9 +23,9 @@ REQUIRED = [
     SPLITS / "split_stats.json",
     SPLITS / "image_manifest.csv",
     SPLITS / "inner_split_summary.json",
-    ROOT / "papers" / "paper_c_plus" / "PLAN.md",
-    ROOT / "papers" / "paper_c_plus" / "scripts" / "extract_breakhis_embeddings.py",
-    ROOT / "papers" / "paper_c_plus" / "scripts" / "run_breakhis_mlp_cv.py",
+    ROOT / "papers" / "paper_c" / "breakhis" / "PLAN.md",
+    ROOT / "papers" / "paper_c" / "breakhis" / "scripts" / "extract_breakhis_embeddings.py",
+    ROOT / "papers" / "paper_c" / "breakhis" / "scripts" / "run_breakhis_mlp_cv.py",
 ]
 
 

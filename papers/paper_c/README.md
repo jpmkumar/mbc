@@ -34,9 +34,4 @@ classical-only (no quantum). BreakHis stage does not modify Stage 1 locks.
 
 Split manifests remain under `data/splits/paper_c/` and
 `data/splits/paper_c_plus/breakhis/` (path names frozen in the lock JSON).
-
-## Note on the old `paper_c_plus/` folder
-
-Stage 2 code and metrics were merged into `papers/paper_c/breakhis/` for the
-combined manuscript. A stub README may remain at `papers/paper_c_plus/` for
-links; do not add new work there.
+There is no separate `papers/paper_c_plus/` code tree.

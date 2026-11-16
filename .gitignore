@@ -147,7 +147,7 @@ papers/paper_c/results/*
 !papers/paper_c/results/curated_metrics.json
 !papers/paper_c/results/README.md
 papers/paper_c/assets/
-# Paper C Stage 2 (BreakHis) — curated metrics only (merged from paper_c_plus).
+# Paper C Stage 2 (BreakHis) — curated metrics only.
 papers/paper_c/breakhis/results/
 !papers/paper_c/breakhis/results/
 papers/paper_c/breakhis/results/*
@@ -156,13 +156,6 @@ papers/paper_c/breakhis/results/*
 !papers/paper_c/breakhis/results/delta_protocol_*.json
 !papers/paper_c/breakhis/results/per_mag_*.json
 !papers/paper_c/breakhis/results/README.md
-# Stub folder only (redirect README); keep any leftover local junk ignored.
-papers/paper_c_plus/assets/
-papers/paper_c_plus/**/*.docx
-papers/paper_c_plus/**/*.pdf
-papers/paper_c_plus/results/
-papers/paper_c_plus/scripts/
-papers/paper_c_plus/manuscript/
 # Venue/submission drafts stay local (cover letters, APC notes, venue scorecards).
 papers/*/COVER_LETTER*.md
 papers/*/APC_GATE.md
