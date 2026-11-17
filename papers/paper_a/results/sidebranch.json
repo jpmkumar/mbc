@@ -1,0 +1,114 @@
+{
+  "exported_utc": "2026-08-17T06:15:44.581774+00:00",
+  "paper": "paper_a_tabular_wbcd",
+  "sweep": "sidebranch_early_fusion",
+  "positive_class": "malignant (label 0)",
+  "quick": false,
+  "note": "Not Mari/histopath: quantum is extra features or a side branch; the 30-D clinical vector is never discarded.",
+  "summary": {
+    "CLASS_NL_SVM": {
+      "accuracy": {
+        "mean": 0.9684055270920664,
+        "std": 0.015907239278925372
+      },
+      "balanced_accuracy": {
+        "mean": 0.9662700362381005,
+        "std": 0.016580788627078485
+      },
+      "precision_malignant": {
+        "mean": 0.9588933025181762,
+        "std": 0.03595838967281003
+      },
+      "recall_malignant": {
+        "mean": 0.9576965669988926,
+        "std": 0.03062621220571247
+      },
+      "f1_malignant": {
+        "mean": 0.9577310428923937,
+        "std": 0.0210395915563069
+      },
+      "auc": {
+        "mean": 0.9931421214626258,
+        "std": 0.008898136719951676
+      }
+    },
+    "QFEAT_SVM": {
+      "accuracy": {
+        "mean": 0.9789163173420278,
+        "std": 0.013293230401581368
+      },
+      "balanced_accuracy": {
+        "mean": 0.9754488819220232,
+        "std": 0.01811627956528622
+      },
+      "precision_malignant": {
+        "mean": 0.9815010570824525,
+        "std": 0.019427035887409193
+      },
+      "recall_malignant": {
+        "mean": 0.962126245847176,
+        "std": 0.03977780079120748
+      },
+      "f1_malignant": {
+        "mean": 0.9711678338869337,
+        "std": 0.01852209942163646
+      },
+      "auc": {
+        "mean": 0.9945846699490657,
+        "std": 0.005873745735150975
+      }
+    },
+    "SIDEBRANCH": {
+      "accuracy": {
+        "mean": 0.9420276354603322,
+        "std": 0.020127695882156044
+      },
+      "balanced_accuracy": {
+        "mean": 0.9356268099553393,
+        "std": 0.01725431454678152
+      },
+      "precision_malignant": {
+        "mean": 0.934027639027639,
+        "std": 0.048614838109434025
+      },
+      "recall_malignant": {
+        "mean": 0.9102990033222591,
+        "std": 0.011184390850899308
+      },
+      "f1_malignant": {
+        "mean": 0.9215379893331097,
+        "std": 0.026025263479404946
+      },
+      "auc": {
+        "mean": 0.9870757923943316,
+        "std": 0.007233701867914698
+      }
+    },
+    "SVM_RBF": {
+      "accuracy": {
+        "mean": 0.9789163173420278,
+        "std": 0.013293230401581368
+      },
+      "balanced_accuracy": {
+        "mean": 0.9754488819220232,
+        "std": 0.01811627956528622
+      },
+      "precision_malignant": {
+        "mean": 0.9815010570824525,
+        "std": 0.019427035887409193
+      },
+      "recall_malignant": {
+        "mean": 0.962126245847176,
+        "std": 0.03977780079120748
+      },
+      "f1_malignant": {
+        "mean": 0.9711678338869337,
+        "std": 0.01852209942163646
+      },
+      "auc": {
+        "mean": 0.9944536512789052,
+        "std": 0.005930704444409134
+      }
+    }
+  }
+}

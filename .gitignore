@@ -107,7 +107,9 @@ GPU_PROJECT_PLAN.md
 **/*PROJECT_PLAN*.md
 
 # Paper workspaces — curated local exports only
-papers/paper_a/results/
+# Paper A results are tracked: the Data Availability statement points to them.
+!papers/paper_a/results/
+!papers/paper_a/results/**
 papers/paper_a/assets/
 papers/paper_a/**/*.docx
 papers/paper_a/**/*.pdf
