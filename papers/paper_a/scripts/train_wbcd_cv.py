@@ -168,20 +168,28 @@ def train_vqc(
     batch_size: int,
     lr: float,
     seed: int,
+    loss_name: str = "mse",
 ) -> tuple[np.ndarray, np.ndarray, int]:
     set_seeds(seed)
     model = VQCHead(n_qubits, n_layers)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     xt = torch.tensor(x_tr, dtype=torch.float32)
+    yt = torch.tensor(y_tr, dtype=torch.long)
     # Reference study: target = 2y - 1  (+1 benign, -1 malignant)
     target = torch.tensor(2.0 * y_tr - 1.0, dtype=torch.float32)
+    ce = nn.CrossEntropyLoss()
     rng = np.random.default_rng(seed)
     model.train()
     for _ in range(epochs):
         for b in _batches(len(xt), batch_size, rng):
             opt.zero_grad()
             z = model(xt[b])
-            loss = ((z - target[b]) ** 2).mean()
+            if loss_name == "ce":
+                # Same label encoding as MatchedMLP: class 0 malignant, 1 benign.
+                logits = torch.stack((-z, z), dim=-1)
+                loss = ce(logits, yt[b])
+            else:
+                loss = ((z - target[b]) ** 2).mean()
             loss.backward()
             opt.step()
     model.eval()
@@ -380,6 +388,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mlp-epochs", type=int, default=80)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--vqc-lr", type=float, default=0.05)
+    p.add_argument(
+        "--vqc-loss",
+        choices=("mse", "ce"),
+        default="mse",
+        help="mse = reference ±1 regression; ce = cross-entropy on [-z, z] logits",
+    )
     p.add_argument("--mlp-lr", type=float, default=1e-3)
     p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     p.add_argument("--qsvm-qubits", type=int, default=4)
@@ -418,7 +432,8 @@ def main() -> None:
     )
     print(
         f"CV: {args.n_repeats}x{args.n_splits} stratified | "
-        f"VQC {args.n_qubits}q x {args.n_layers}L | epochs={args.vqc_epochs}"
+        f"VQC {args.n_qubits}q x {args.n_layers}L | "
+        f"loss={args.vqc_loss} epochs={args.vqc_epochs}"
     )
 
     cv = RepeatedStratifiedKFold(
@@ -611,6 +626,7 @@ def main() -> None:
             batch_size=args.batch_size,
             lr=args.vqc_lr,
             seed=args.seed + fold,
+            loss_name=args.vqc_loss,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
         rec.update(
@@ -694,6 +710,7 @@ def main() -> None:
             batch_size=args.batch_size,
             lr=args.vqc_lr,
             seed=args.seed + fold,
+            loss_name=args.vqc_loss,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
         rec.update(
@@ -746,6 +763,7 @@ def main() -> None:
             "n_qubits": args.n_qubits,
             "n_layers": args.n_layers,
             "epochs": args.vqc_epochs,
+            "loss": args.vqc_loss,
             "theoretical_params": vqc_param_count(args.n_qubits, args.n_layers),
         },
         "summary": summary,

@@ -11,7 +11,8 @@ Breast Cancer Diagnostic tabular hybrid QML).
 | Paper A workspace | [`papers/paper_a/`](.) |
 | Development branch | `docs/histopath-writing-q1-guidelines` |
 
-**Stable URL for submission** (after you tag a release):
+**Stable URL for submission** (tag at portal upload; do not invent a tag
+before the manuscript files are frozen):
 
 ```text
 https://github.com/jpmkumar/mbc/tree/<TAG>/papers/paper_a

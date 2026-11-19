@@ -65,12 +65,22 @@ recall is **benign-class** recall — not malignant sensitivity.
 | VQC standalone (8q) | 93.86% | 91.14% | 100% | 95.36% | 97.78% |
 | Hybrid MLP+VQC (6q) | 87.72% | 86.25% | 95.83% | 90.79% | 93.78% |
 
+## Venue
+
+**Frontiers in Artificial Intelligence** (Machine Learning; locked 2026-11-19).
+CICT not used. See [`VENUE.md`](VENUE.md). Active pack:
+`manuscript_frontiers/main.tex` (local; gitignored). Scientific Reports
+`manuscript/` is parked — do not dual-submit.
+
 ## Status
 
 | Item | Status |
 |------|--------|
 | Reference holdout + XAI | Separate local pilot-study checkout |
 | Confirmatory 5-fold CV (malignant metrics, matched MLP) | **Done** — `results/confirmatory_cv.json` |
+| Results on GitHub | **Done** — tag `paper-a-v1.0` |
+| Frontiers manuscript | **Active** — `manuscript_frontiers/main.tex` |
+| Scientific Reports manuscript | **Parked** — `manuscript/main.tex` |
 
 ## Directory layout
 

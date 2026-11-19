@@ -68,6 +68,18 @@ Paired tests on the **same fold scores**:
 Wilcoxon signed-rank and paired *t*-test. *n* = 5 is small; treat *p*
 as descriptive unless `--n-repeats` ≥ 2.
 
+Sensitivity (do not overwrite `results/confirmatory_*.json`):
+
+```bash
+# Repeated stratified CV (10 scores)
+python papers/paper_a/scripts/train_wbcd_cv.py --n-repeats 2 \
+  --out-dir papers/paper_a/results/repeated_2x5
+
+# Equal-loss / equal-epoch VQC (CE on [-z, z] logits, 80 epochs)
+python papers/paper_a/scripts/train_wbcd_cv.py --vqc-loss ce --vqc-epochs 80 \
+  --out-dir papers/paper_a/results/vqc_ce80
+```
+
 ## How to run
 
 ```bash
