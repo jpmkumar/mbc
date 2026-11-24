@@ -108,34 +108,50 @@ class MatchedMLP(nn.Module):
 
 def build_vqc(n_qubits: int, n_layers: int, entangle: str, dev_name: str):
     dev = qml.device(dev_name, wires=n_qubits)
+    diff = pick_diff_method(dev_name)
+
+    if entangle == "none":
+        def circuit(inputs):
+            qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
+            return qml.expval(qml.PauliZ(0))
+
+        return qml.QNode(circuit, dev, interface="torch", diff_method=diff), 0
 
     def circuit(inputs, weights):
         qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
         if entangle == "strong":
             qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
-        elif entangle == "basic":
-            qml.BasicEntanglerLayers(weights, wires=range(n_qubits))
         else:
-            pass  # product: encoding only
+            qml.BasicEntanglerLayers(weights, wires=range(n_qubits))
         return qml.expval(qml.PauliZ(0))
 
-    diff = pick_diff_method(dev_name)
     qnode = qml.QNode(circuit, dev, interface="torch", diff_method=diff)
-    shape = (max(n_layers, 1), n_qubits, 3) if entangle != "none" else (1, n_qubits, 3)
-    layer = qml.qnn.TorchLayer(qnode, {"weights": shape})
-    return layer, shape[0] if entangle != "none" else 0
+    # StronglyEntanglingLayers: (L, n, 3); BasicEntanglerLayers: (L, n)
+    shape = (
+        (max(n_layers, 1), n_qubits, 3)
+        if entangle == "strong"
+        else (max(n_layers, 1), n_qubits)
+    )
+    return qml.qnn.TorchLayer(qnode, {"weights": shape}), shape[0]
 
 
 class VQCModule(nn.Module):
     def __init__(self, n_qubits: int, n_layers: int, entangle: str, dev_name: str):
         super().__init__()
-        self.qlayer, self.effective_layers = build_vqc(n_qubits, n_layers, entangle, dev_name)
         self.entangle = entangle
+        built, self.effective_layers = build_vqc(n_qubits, n_layers, entangle, dev_name)
         if entangle == "none":
-            for p in self.qlayer.parameters():
-                nn.init.zeros_(p)
+            self.qlayer = None
+            self._encode = built
+        else:
+            self.qlayer = built
+            self._encode = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.qlayer is None:
+            # Batched encoding-only expectation
+            outs = [self._encode(row) for row in x]
+            return torch.stack(outs)
         return self.qlayer(x)
 
 
@@ -190,26 +206,28 @@ def train_vqc(
 ) -> dict:
     set_seeds(seed)
     model = VQCModule(8, n_layers, entangle, dev_name)
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
     xt = torch.tensor(x_tr, dtype=torch.float32)
     yt = torch.tensor(y_tr, dtype=torch.long)
     target = torch.tensor(2.0 * y_tr - 1.0, dtype=torch.float32)
     ce = nn.CrossEntropyLoss()
     rng = np.random.default_rng(seed)
-    model.train()
-    for _ in range(epochs):
-        idx = rng.permutation(len(xt))
-        for start in range(0, len(xt), 32):
-            b = idx[start : start + 32]
-            opt.zero_grad()
-            z = model(xt[b])
-            if loss_name == "ce":
-                logits = torch.stack((-z, z), dim=-1)
-                loss = ce(logits, yt[b])
-            else:
-                loss = ((z - target[b]) ** 2).mean()
-            loss.backward()
-            opt.step()
+    # Encoding-only ablation has no trainable weights — evaluate, do not backward.
+    if entangle != "none" and any(p.requires_grad for p in model.parameters()):
+        opt = torch.optim.Adam(model.parameters(), lr=lr)
+        model.train()
+        for _ in range(epochs):
+            idx = rng.permutation(len(xt))
+            for start in range(0, len(xt), 32):
+                b = idx[start : start + 32]
+                opt.zero_grad()
+                z = model(xt[b])
+                if loss_name == "ce":
+                    logits = torch.stack((-z, z), dim=-1)
+                    loss = ce(logits, yt[b])
+                else:
+                    loss = ((z - target[b]) ** 2).mean()
+                loss.backward()
+                opt.step()
     model.eval()
     with torch.no_grad():
         z_te = model(torch.tensor(x_te, dtype=torch.float32)).cpu().numpy()
