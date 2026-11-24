@@ -297,7 +297,7 @@ def summarize(rows: list[dict]) -> dict:
                 continue
             block[k] = {
                 "mean": float(np.mean(vals)),
-                "std": float(np.std(vals, ddof=0)),
+                "std": float(np.std(vals, ddof=1)),
                 "n": len(vals),
             }
         if block:

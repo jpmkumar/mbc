@@ -380,7 +380,15 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Paper A confirmatory WBCD CV")
     p.add_argument("--n-splits", type=int, default=5)
     p.add_argument("--n-repeats", type=int, default=1)
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=42,
+                   help="CV split seed (and default initialisation seed)")
+    p.add_argument(
+        "--init-seed",
+        type=int,
+        default=None,
+        help="Initialisation seed for neural/variational/RF models; folds stay "
+        "fixed by --seed. Default: same as --seed (reproduces the confirmatory run).",
+    )
     p.add_argument("--n-qubits", type=int, default=8)
     p.add_argument("--n-layers", type=int, default=2)
     p.add_argument("--hybrid-qubits", type=int, default=6)
@@ -422,7 +430,8 @@ def main() -> None:
         args.mlp_epochs = 5
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    set_seeds(args.seed)
+    init_seed = args.seed if args.init_seed is None else args.init_seed
+    set_seeds(init_seed)
 
     data = load_breast_cancer()
     x, y = data.data, data.target
@@ -460,19 +469,19 @@ def main() -> None:
                     kernel="rbf",
                     C=10,
                     gamma="scale",
-                    random_state=args.seed + fold,
+                    random_state=init_seed + fold,
                 ),
             ),
             (
                 "SVM_LIN",
-                SVC(kernel="linear", C=10, random_state=args.seed + fold),
+                SVC(kernel="linear", C=10, random_state=init_seed + fold),
             ),
             (
                 "RF",
                 RandomForestClassifier(
                     n_estimators=200,
                     max_depth=10,
-                    random_state=args.seed + fold,
+                    random_state=init_seed + fold,
                 ),
             ),
         ]:
@@ -492,7 +501,7 @@ def main() -> None:
                         kernel="rbf",
                         C=args.qsvm_c,
                         gamma="scale",
-                        random_state=args.seed + fold,
+                        random_state=init_seed + fold,
                     ),
                 ),
                 (
@@ -500,7 +509,7 @@ def main() -> None:
                     SVC(
                         kernel="linear",
                         C=args.qsvm_c,
-                        random_state=args.seed + fold,
+                        random_state=init_seed + fold,
                     ),
                 ),
             ]:
@@ -524,7 +533,7 @@ def main() -> None:
                 epochs=args.mlp_epochs,
                 batch_size=args.batch_size,
                 lr=args.mlp_lr,
-                seed=args.seed + fold,
+                seed=init_seed + fold,
             )
             rec = malignant_metrics(prep.y_te, pred, p_mal)
             rec.update(
@@ -548,7 +557,7 @@ def main() -> None:
                 n_qubits=args.qsvm_qubits,
                 reps=args.qsvm_reps,
                 c=args.qsvm_c,
-                seed=args.seed + fold,
+                seed=init_seed + fold,
             )
             rec = malignant_metrics(prep.y_te, pred, p_mal)
             rec.update(
@@ -577,7 +586,7 @@ def main() -> None:
             epochs=args.mlp_epochs,
             batch_size=args.batch_size,
             lr=args.mlp_lr,
-            seed=args.seed + fold,
+            seed=init_seed + fold,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
         rec.update(
@@ -601,7 +610,7 @@ def main() -> None:
             epochs=args.mlp_epochs,
             batch_size=args.batch_size,
             lr=args.mlp_lr,
-            seed=args.seed + fold,
+            seed=init_seed + fold,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
         rec.update(
@@ -625,7 +634,7 @@ def main() -> None:
             epochs=args.vqc_epochs,
             batch_size=args.batch_size,
             lr=args.vqc_lr,
-            seed=args.seed + fold,
+            seed=init_seed + fold,
             loss_name=args.vqc_loss,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
@@ -648,7 +657,7 @@ def main() -> None:
             activation="relu",
             solver="adam",
             max_iter=200 if args.quick else 500,
-            random_state=args.seed + fold,
+            random_state=init_seed + fold,
             early_stopping=True,
             validation_fraction=0.15,
         )
@@ -685,7 +694,7 @@ def main() -> None:
             epochs=args.mlp_epochs,
             batch_size=args.batch_size,
             lr=args.mlp_lr,
-            seed=args.seed + fold,
+            seed=init_seed + fold,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
         rec.update(
@@ -709,7 +718,7 @@ def main() -> None:
             epochs=args.vqc_epochs,
             batch_size=args.batch_size,
             lr=args.vqc_lr,
-            seed=args.seed + fold,
+            seed=init_seed + fold,
             loss_name=args.vqc_loss,
         )
         rec = malignant_metrics(prep.y_te, pred, p_mal)
@@ -758,6 +767,7 @@ def main() -> None:
             "n_splits": args.n_splits,
             "n_repeats": args.n_repeats,
             "seed": args.seed,
+            "init_seed": init_seed,
         },
         "vqc": {
             "n_qubits": args.n_qubits,

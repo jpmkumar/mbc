@@ -1,0 +1,199 @@
+{
+  "exported_utc": "2026-11-22T15:05:39.134405+00:00",
+  "paper": "paper_a_tabular_wbcd",
+  "sweep": "morph_block_vqc_and_kta",
+  "positive_class": "malignant (label 0)",
+  "note": "VQC_MORPH10: qubit i encodes mean/error/worst for attribute i. KTA computed on train Gram only.",
+  "summary": {
+    "QSVM_ZZ4": {
+      "accuracy": {
+        "mean": 0.8752678155565906,
+        "std": 0.01672868057025691
+      },
+      "balanced_accuracy": {
+        "mean": 0.8594887802265792,
+        "std": 0.026590146347904776
+      },
+      "precision_malignant": {
+        "mean": 0.8628779931796279,
+        "std": 0.04095773204570738
+      },
+      "recall_malignant": {
+        "mean": 0.79734219269103,
+        "std": 0.0767011076338855
+      },
+      "f1_malignant": {
+        "mean": 0.8249289911720732,
+        "std": 0.031427639696639746
+      },
+      "auc": {
+        "mean": 0.940001139481159,
+        "std": 0.014379366112977838
+      },
+      "kta_train": {
+        "mean": 0.21111180756144599,
+        "std": 0.010492912399840033
+      }
+    },
+    "QSVM_ANGLE4": {
+      "accuracy": {
+        "mean": 0.9631268436578171,
+        "std": 0.018699801789358098
+      },
+      "balanced_accuracy": {
+        "mean": 0.958281666744654,
+        "std": 0.022694920195518102
+      },
+      "precision_malignant": {
+        "mean": 0.9627738927738928,
+        "std": 0.030964942314397212
+      },
+      "recall_malignant": {
+        "mean": 0.9389811738648948,
+        "std": 0.045577284042626426
+      },
+      "f1_malignant": {
+        "mean": 0.9498115440924524,
+        "std": 0.026009119209383674
+      },
+      "auc": {
+        "mean": 0.9937408256602491,
+        "std": 0.005151647700594011
+      },
+      "kta_train": {
+        "mean": 0.5079851696228423,
+        "std": 0.03851572466357914
+      }
+    },
+    "VQC_MORPH10": {
+      "accuracy": {
+        "mean": 0.8225586089116597,
+        "std": 0.06072642464821708
+      },
+      "balanced_accuracy": {
+        "mean": 0.7674466696821758,
+        "std": 0.07726292852411479
+      },
+      "precision_malignant": {
+        "mean": 0.9424185463659148,
+        "std": 0.05316828627490635
+      },
+      "recall_malignant": {
+        "mean": 0.5517165005537098,
+        "std": 0.14303156229241776
+      },
+      "f1_malignant": {
+        "mean": 0.6886224575428284,
+        "std": 0.1254608514553993
+      },
+      "auc": {
+        "mean": 0.9533469767788472,
+        "std": 0.031087369008538483
+      }
+    },
+    "MLP_MORPH30": {
+      "accuracy": {
+        "mean": 0.9455674584691817,
+        "std": 0.02438238404896371
+      },
+      "balanced_accuracy": {
+        "mean": 0.9374125242410536,
+        "std": 0.024321606263286524
+      },
+      "precision_malignant": {
+        "mean": 0.9475275397796817,
+        "std": 0.04702986428500396
+      },
+      "recall_malignant": {
+        "mean": 0.9055370985603544,
+        "std": 0.030048849803938404
+      },
+      "f1_malignant": {
+        "mean": 0.9255404441905026,
+        "std": 0.03255499879896661
+      },
+      "auc": {
+        "mean": 0.9904289431680521,
+        "std": 0.0071505172505974945
+      }
+    },
+    "SVM_RBF": {
+      "accuracy": {
+        "mean": 0.9789163173420278,
+        "std": 0.011889826727401107
+      },
+      "balanced_accuracy": {
+        "mean": 0.9754488819220232,
+        "std": 0.016203693042948133
+      },
+      "precision_malignant": {
+        "mean": 0.9815010570824525,
+        "std": 0.017376069138229963
+      },
+      "recall_malignant": {
+        "mean": 0.962126245847176,
+        "std": 0.03557834662583394
+      },
+      "f1_malignant": {
+        "mean": 0.9711678338869337,
+        "std": 0.016566669357115465
+      },
+      "auc": {
+        "mean": 0.9944536512789052,
+        "std": 0.005304583316863579
+      }
+    }
+  },
+  "kta_folds": [
+    {
+      "fold": 0,
+      "kernel": "zz",
+      "kta_train": 0.21232916060640156
+    },
+    {
+      "fold": 0,
+      "kernel": "angle",
+      "kta_train": 0.5202688686849498
+    },
+    {
+      "fold": 1,
+      "kernel": "zz",
+      "kta_train": 0.1912938379035318
+    },
+    {
+      "fold": 1,
+      "kernel": "angle",
+      "kta_train": 0.48689522616209474
+    },
+    {
+      "fold": 2,
+      "kernel": "zz",
+      "kta_train": 0.2205359581597742
+    },
+    {
+      "fold": 2,
+      "kernel": "angle",
+      "kta_train": 0.5227266138395523
+    },
+    {
+      "fold": 3,
+      "kernel": "zz",
+      "kta_train": 0.21213957679302148
+    },
+    {
+      "fold": 3,
+      "kernel": "angle",
+      "kta_train": 0.44762982373113863
+    },
+    {
+      "fold": 4,
+      "kernel": "zz",
+      "kta_train": 0.21926050434450095
+    },
+    {
+      "fold": 4,
+      "kernel": "angle",
+      "kta_train": 0.5624053156964764
+    }
+  ]
+}

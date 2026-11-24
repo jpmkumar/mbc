@@ -208,7 +208,13 @@ def train_vqc_z0_mse(
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=42, help="CV split seed")
+    p.add_argument(
+        "--init-seed",
+        type=int,
+        default=None,
+        help="Initialisation seed; folds stay fixed by --seed. Default: --seed.",
+    )
     p.add_argument("--quick", action="store_true")
     p.add_argument(
         "--out-dir",
@@ -253,7 +259,7 @@ def main() -> None:
         x_tr_q, x_te_q = prep_pca8(x_tr_s, x_te_s)
 
         for name, family, kw in configs:
-            seed = args.seed + fold
+            seed = (args.seed if args.init_seed is None else args.init_seed) + fold
             if name == "baseline_z0_mse_L2":
                 m = train_vqc_z0_mse(
                     x_tr_q, y_tr, x_te_q, y_te,
@@ -292,13 +298,16 @@ def main() -> None:
     summary = {}
     for model, g in df.groupby("model"):
         summary[model] = {
-            k: {"mean": float(g[k].mean()), "std": float(g[k].std(ddof=0)), "n": int(len(g))}
+            k: {"mean": float(g[k].mean()), "std": float(g[k].std(ddof=1)), "n": int(len(g))}
             for k in ("balanced_accuracy", "recall_malignant", "auc", "n_params")
             if k in g
         }
     payload = {
         "exported_utc": datetime.now(timezone.utc).isoformat(),
         "n_splits": n_splits,
+        "cv_seed": args.seed,
+        "init_seed": args.seed if args.init_seed is None else args.init_seed,
+        "std_ddof": 1,
         "quick": bool(args.quick),
         "summary": summary,
     }

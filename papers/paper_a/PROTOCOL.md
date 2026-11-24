@@ -138,5 +138,37 @@ branch.
 
 Output: `papers/paper_a/results/sidebranch.json`.
 
+## Morphology-block VQC and kernel target alignment (KTA)
+
+Blind PCA encoding ignores the Wisconsin table layout (10 attributes $\times$
+mean / SE / worst). This arm keeps the native 30-D vector and assigns one qubit
+per attribute.
+
+```bash
+python papers/paper_a/scripts/train_wbcd_morph_kta.py
+```
+
+| ID | Role |
+|----|------|
+| `VQC_MORPH10` | Wire $i$: RY(mean$_i$), RZ(SE$_i$), RX(worst$_i$); then 2$\times$ SEL |
+| `MLP_MORPH30` | Capacity-matched MLP on the same angle-scaled 30-D input |
+| `QSVM_ZZ4` / `QSVM_ANGLE4` | Same as sweep; train-fold **KTA** recorded |
+| `SVM_RBF` | 30-D bar |
+
+Output: `papers/paper_a/results/morph_kta.json`. KTA is centered
+kernel--target alignment on the **training** Gram matrix (not a test leak).
+
+## Quantum diagnosis (why quantum loses)
+
+Mechanistic follow-up on the same folds: KTA vs test accuracy (Spearman),
+VQC depth ablation $L\in\{1,2,3,4\}$ with matched MLP-PCA8, train gradient
+L2 norm at epoch 0/30, malignant false-negative overlap, Brier score.
+
+```bash
+python papers/paper_a/scripts/train_wbcd_quantum_diagnosis.py
+```
+
+Output: `papers/paper_a/results/quantum_diagnosis.json`.
+
 Outputs (gitignored): `papers/paper_a/results/confirmatory_cv.json`,
 `confirmatory_folds.csv`, `confirmatory_stats.json`.
