@@ -253,8 +253,12 @@ def main() -> None:
     data = load_breast_cancer()
     x = data.data.astype(np.float64)
     y = data.target.astype(int)
-    n_splits = 1 if args.quick else 5
+    # StratifiedKFold requires n_splits >= 2
+    n_splits = 2 if args.quick else 5
     fractions = [0.5, 1.0] if args.quick else [0.25, 0.5, 0.75, 1.0]
+    if args.quick:
+        args.vqc_epochs = min(args.vqc_epochs, 10)
+        args.mlp_epochs = min(args.mlp_epochs, 30)
     dev_name = pick_device(8)
     lrs_vqc = [0.01, 0.05, 0.1] if not args.quick else [0.05]
     lrs_mlp = [1e-3, 3e-3] if not args.quick else [1e-3]
