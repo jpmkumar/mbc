@@ -90,8 +90,8 @@ class MatchedMLP(nn.Module):
 def build_vqc(n_qubits: int, n_layers: int, entangle: str, dev_name: str):
     dev = qml.device(dev_name, wires=n_qubits)
 
-    def circuit(x, weights):
-        qml.AngleEmbedding(x, wires=range(n_qubits), rotation="Y")
+    def circuit(inputs, weights):
+        qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
         if entangle == "strong":
             qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
         elif entangle == "basic":
