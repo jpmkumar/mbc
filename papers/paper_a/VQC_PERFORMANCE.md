@@ -74,5 +74,21 @@ Script: `scripts/train_wbcd_vqc_boost.py` (multi-Z + CE + depth/reupload sweep).
 | mlp_pca8 | 0.893 |
 | baseline_z0_mse_L2 (old recipe) | 0.854 |
 
-Multi-Z readout alone closed most of the gap in this smoke. Run full 5-fold on
-the campus box before claiming numbers in the manuscript.
+### Full 5-fold campus (`results/vqc_boost/`, 2026-11-24)
+
+| Model | bal.acc | malignant recall | params |
+|-------|---------|------------------|--------|
+| **vqc_allz_ce_L4** | **0.971±0.015** | **0.958** | 114 |
+| **vqc_reup2_allz_ce_L2** | **0.970±0.019** | **0.962** | 114 |
+| linear_pca8 | 0.964±0.031 | 0.930 | 18 |
+| mlp_pca8 | 0.957±0.037 | 0.934 | 106 |
+| vqc_allz_ce_L2 | 0.954±0.030 | 0.930 | 66 |
+| vqc_z0_ce_head_L2 | 0.928±0.023 | 0.901 | 52 |
+| baseline_z0_mse_L2 (= locked VQC_8) | 0.840±0.030 | 0.694 | 48 |
+
+Multi-Z + CE head + L4 (or reupload×2) **matches / slightly exceeds** matched MLP
+and approaches SVM-RBF (~0.975). Ablation: CE on ⟨Z₀⟩ alone only reaches 0.928 —
+**readout width**, not CE alone, is the main lever.
+
+Manuscript framing: report boost as **quantum feature map + classical linear
+head**; keep ⟨Z₀⟩+MSE VQC_8 as the negative-benchmark standalone arm.
