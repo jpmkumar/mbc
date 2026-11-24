@@ -273,20 +273,35 @@ def mean_product_state_fidelity(x_batch: np.ndarray, n_qubits: int, dev_name: st
 
 
 def summarize(rows: list[dict]) -> dict:
-    out: dict[str, dict] = {}
+    out: dict[str, list] = {}
     for r in rows:
-        key = r.get("arm", r.get("model", "unknown"))
+        # Keep models separate under the same arm (SVM lacks recall_malignant, etc.)
+        arm = r.get("arm", "unknown")
+        model = r.get("model")
+        key = f"{arm}|{model}" if model else arm
         out.setdefault(key, []).append(r)
+    metric_keys = (
+        "balanced_accuracy",
+        "recall_malignant",
+        "auc",
+        "train_acc",
+        "train_bal_acc",
+        "mean_fidelity_to_plus",
+    )
     summ = {}
     for key, rs in out.items():
-        summ[key] = {
-            k: {
-                "mean": float(np.mean([x[k] for x in rs])),
-                "std": float(np.std([x[k] for x in rs], ddof=0)),
+        block = {}
+        for k in metric_keys:
+            vals = [float(x[k]) for x in rs if k in x]
+            if not vals:
+                continue
+            block[k] = {
+                "mean": float(np.mean(vals)),
+                "std": float(np.std(vals, ddof=0)),
+                "n": len(vals),
             }
-            for k in ("balanced_accuracy", "recall_malignant", "auc", "train_acc")
-            if k in rs[0]
-        }
+        if block:
+            summ[key] = block
     return summ
 
 
