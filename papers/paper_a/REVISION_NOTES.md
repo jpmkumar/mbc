@@ -31,21 +31,20 @@ the suffix `_before_revision_2026-11-24`.
 - `train_wbcd_gpu_investigation.py`, `train_wbcd_morph_kta.py`: ddof = 1.
 - New: `analysis_revision_stats.py`, `run_multiseed.sh`, `analysis_multiseed.py`, `build_frontiers_docx.py`.
 
+## Multi-seed battery (done 2026-11-24)
+
+Campus run finished (ntfy 13:35 IST). Seed 42 reproduced confirmatory VQC-8
+0.840 / MLP-PCA8 0.957 / SVM-RBF 0.975 and boost L4 0.971. Seed-averaged
+primary Δ = −0.113 (95% CI −0.143 to −0.084; NB p = 4.6e-4). All-Z L2 ≡
+MLP-PCA8 within ±0.02 (TOST); L4 vs linear PCA-8 Δ = +0.005 (p = 0.71).
+Summaries in `results/multiseed/`; manuscript Frontiers draft updated.
+
 ## Still to do (authors)
 
-1. **Run the multi-seed battery** on the campus workstation (from the `mbc` root):
-   ```bash
-   source .venv/bin/activate
-   QUICK=1 bash papers/paper_a/scripts/run_multiseed.sh          # smoke test first
-   bash papers/paper_a/scripts/run_multiseed.sh                  # 5 seeds: 42 101 202 303 404
-   ```
-   Output: `papers/paper_a/results/multiseed/multiseed_summary.{json,md}`.
-   Seed 42 must reproduce the deposited confirmatory and boost numbers.
-   Send the summary back and the manuscript will be updated (seed SDs, paired
-   tests and TOST equivalence for the read-out arms, margin ±0.02).
-2. Verify the four new references against Crossref (Bowles 2024 is an arXiv
+1. Verify the four new references against Crossref (Bowles 2024 is an arXiv
    preprint; it breaks the journal-only rule in AGENTS.md — keep or drop).
-3. Confirm the claims about what Jose 2024 / Yadav 2026 / Vashisth 2021
+2. Confirm the claims about what Jose 2024 / Yadav 2026 / Vashisth 2021
    compared against (ideally a supplementary table).
-4. Commit, tag `paper-a-v1.2`, and upload a new Zenodo version; update the DOI
-   in the manuscript if Zenodo mints a version DOI.
+3. Commit remaining scripts if needed, tag `paper-a-v1.2`, and upload a new
+   Zenodo version; update the DOI in the manuscript if Zenodo mints a version
+   DOI.

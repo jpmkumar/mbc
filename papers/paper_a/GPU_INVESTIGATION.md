@@ -3,6 +3,14 @@
 Campus runs use the same **seed-42, 5-fold splits** as `train_wbcd_cv.py`. Malignant
 = label 0. Results gitignored locally unless you copy JSON back.
 
+## ntfy + detach (required)
+
+Long campus runs must notify via ntfy and survive SSH logout (no home VPN).
+
+- Topic: `~/.config/mbc/ntfy_topic` (same as Paper D / Path A)
+- Launch under `tmux` or `nohup … &` + `disown`
+- `run_multiseed.sh` already sends start / per-seed / complete / fail pings
+
 ## Install on the server (once)
 
 Typical VIT scope nodes: **no `python` alias**, **PEP 668** blocks
