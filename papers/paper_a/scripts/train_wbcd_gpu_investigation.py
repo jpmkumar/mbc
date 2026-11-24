@@ -8,9 +8,10 @@ Arms (same folds as train_wbcd_cv.py):
   4. LR grid: small search with fixed epoch budget for VQC vs MLP
   5. Product-state fidelity: mean overlap to unentangled |+>^n after encoding
 
-Uses lightning.gpu when available, else lightning.qubit / default.qubit.
-Lightning devices use adjoint differentiation; default.qubit uses backprop
-(lightning does not support backprop).
+VQC training uses default.qubit + backprop (same as train_wbcd_cv.py).
+Lightning + adjoint is version-fragile with TorchLayer (no grad_fn on older
+PennyLane); WBCD 8-qubit circuits are small enough that default.qubit is fine
+even on a GPU box. Optional --device lightning.qubit|lightning.gpu for newer PL.
 """
 
 from __future__ import annotations
@@ -44,25 +45,43 @@ def set_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def pick_device(n_wires: int) -> str:
-    if torch.cuda.is_available():
-        try:
-            qml.device("lightning.gpu", wires=n_wires)
-            return "lightning.gpu"
-        except Exception as exc:
-            print(f"lightning.gpu unavailable ({exc!r}); falling back")
-    try:
-        qml.device("lightning.qubit", wires=n_wires)
-        return "lightning.qubit"
-    except Exception:
-        return "default.qubit"
-
-
 def pick_diff_method(dev_name: str) -> str:
-    # lightning.*: adjoint; default.qubit: backprop
     if str(dev_name).startswith("lightning"):
         return "adjoint"
     return "backprop"
+
+
+def pick_device(n_wires: int, requested: str = "auto") -> str:
+    """Resolve PennyLane device. Default: default.qubit (reliable Torch grads)."""
+    _ = n_wires
+    if requested and requested != "auto":
+        return requested
+    # Match confirmatory CV: TorchLayer + backprop needs a state sim device.
+    return "default.qubit"
+
+
+def assert_torch_grads(dev_name: str) -> None:
+    """Fail fast if QNode+TorchLayer cannot backprop (avoids mid-epoch crash)."""
+    n = 2
+    dev = qml.device(dev_name, wires=n)
+    diff = pick_diff_method(dev_name)
+
+    def circuit(inputs, weights):
+        qml.AngleEmbedding(inputs, wires=range(n), rotation="Y")
+        qml.StronglyEntanglingLayers(weights, wires=range(n))
+        return qml.expval(qml.PauliZ(0))
+
+    qnode = qml.QNode(circuit, dev, interface="torch", diff_method=diff)
+    layer = qml.qnn.TorchLayer(qnode, {"weights": (1, n, 3)})
+    x = torch.rand(4, n)
+    loss = layer(x).pow(2).mean()
+    loss.backward()
+    grad = next(layer.parameters()).grad
+    if grad is None:
+        raise RuntimeError(
+            f"No torch grad with device={dev_name} diff={diff}. "
+            "Use --device default.qubit or upgrade pennylane."
+        )
 
 
 def prep_pca8(x_tr_s: np.ndarray, x_te_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -260,6 +279,11 @@ def main() -> None:
     p.add_argument("--out-dir", type=Path, default=ROOT / "papers/paper_a/results/gpu_investigation")
     p.add_argument("--vqc-epochs", type=int, default=30)
     p.add_argument("--mlp-epochs", type=int, default=80)
+    p.add_argument(
+        "--device",
+        default="auto",
+        help="PennyLane device: auto (=default.qubit), default.qubit, lightning.qubit, lightning.gpu",
+    )
     args = p.parse_args()
 
     data = load_breast_cancer()
@@ -271,7 +295,8 @@ def main() -> None:
     if args.quick:
         args.vqc_epochs = min(args.vqc_epochs, 10)
         args.mlp_epochs = min(args.mlp_epochs, 30)
-    dev_name = pick_device(8)
+    dev_name = pick_device(8, args.device)
+    assert_torch_grads(dev_name)
     lrs_vqc = [0.01, 0.05, 0.1] if not args.quick else [0.05]
     lrs_mlp = [1e-3, 3e-3] if not args.quick else [1e-3]
 
@@ -279,7 +304,7 @@ def main() -> None:
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=args.seed)
     print(
         f"GPU investigation | device={dev_name} | diff={pick_diff_method(dev_name)} "
-        f"| cuda={torch.cuda.is_available()} | folds={n_splits}"
+        f"| cuda={torch.cuda.is_available()} | folds={n_splits} | pennylane={qml.__version__}"
     )
 
     for fold, (tr, te) in enumerate(cv.split(x, y)):
