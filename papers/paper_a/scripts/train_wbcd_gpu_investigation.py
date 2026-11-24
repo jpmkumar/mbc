@@ -8,7 +8,9 @@ Arms (same folds as train_wbcd_cv.py):
   4. LR grid: small search with fixed epoch budget for VQC vs MLP
   5. Product-state fidelity: mean overlap to unentangled |+>^n after encoding
 
-Uses lightning.gpu when torch.cuda.is_available(), else lightning.qubit.
+Uses lightning.gpu when available, else lightning.qubit / default.qubit.
+Lightning devices use adjoint differentiation; default.qubit uses backprop
+(lightning does not support backprop).
 """
 
 from __future__ import annotations
@@ -47,13 +49,20 @@ def pick_device(n_wires: int) -> str:
         try:
             qml.device("lightning.gpu", wires=n_wires)
             return "lightning.gpu"
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"lightning.gpu unavailable ({exc!r}); falling back")
     try:
         qml.device("lightning.qubit", wires=n_wires)
         return "lightning.qubit"
     except Exception:
         return "default.qubit"
+
+
+def pick_diff_method(dev_name: str) -> str:
+    # lightning.*: adjoint; default.qubit: backprop
+    if str(dev_name).startswith("lightning"):
+        return "adjoint"
+    return "backprop"
 
 
 def prep_pca8(x_tr_s: np.ndarray, x_te_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -91,7 +100,8 @@ def build_vqc(n_qubits: int, n_layers: int, entangle: str, dev_name: str):
             pass  # product: encoding only
         return qml.expval(qml.PauliZ(0))
 
-    qnode = qml.QNode(circuit, dev, interface="torch", diff_method="backprop")
+    diff = pick_diff_method(dev_name)
+    qnode = qml.QNode(circuit, dev, interface="torch", diff_method=diff)
     shape = (max(n_layers, 1), n_qubits, 3) if entangle != "none" else (1, n_qubits, 3)
     layer = qml.qnn.TorchLayer(qnode, {"weights": shape})
     return layer, shape[0] if entangle != "none" else 0
@@ -208,7 +218,9 @@ def _metrics(y_te, pred, p_mal) -> dict:
 
 def mean_product_state_fidelity(x_batch: np.ndarray, n_qubits: int, dev_name: str) -> float:
     """Mean |<psi(x)|+...+>|^2 after angle encoding (entanglement diagnostic)."""
-    dev = qml.device(dev_name, wires=n_qubits)
+    # state() needs a statevector device; always use default.qubit here
+    _ = dev_name
+    dev = qml.device("default.qubit", wires=n_qubits)
     plus = np.ones(2**n_qubits) / np.sqrt(2**n_qubits)
 
     @qml.qnode(dev)
@@ -265,7 +277,10 @@ def main() -> None:
 
     rows: list[dict] = []
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=args.seed)
-    print(f"GPU investigation | device={dev_name} | cuda={torch.cuda.is_available()} | folds={n_splits}")
+    print(
+        f"GPU investigation | device={dev_name} | diff={pick_diff_method(dev_name)} "
+        f"| cuda={torch.cuda.is_available()} | folds={n_splits}"
+    )
 
     for fold, (tr, te) in enumerate(cv.split(x, y)):
         scaler = StandardScaler()
