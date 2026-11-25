@@ -77,7 +77,7 @@ def make_pipeline(path: Path) -> None:
     w0, w1, w2, w3 = 2.0, 2.3, 2.8, 3.1
     h = 0.85
 
-    _box(ax, (x0, 2.5), w0, h, "WBCD\n30 features\n$n=569$", weight="bold")
+    _box(ax, (x0, 2.5), w0, h, "WDBC\n30 features\n$n=569$", weight="bold")
     _box(ax, (x1, 2.5), w1, h, "Fold-wise\nStandardScaler\n(+ PCA / $[0,\\pi]$)")
 
     # Branch heads
@@ -176,7 +176,7 @@ def make_performance(path: Path, summary: dict) -> None:
     )
 
     ax.set_ylim(0.55, 1.05)
-    ax.set_ylabel("Score (mean ± std)", fontsize=9)
+    ax.set_ylabel("Score (mean ± SD)", fontsize=9)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=8)
     ax.tick_params(axis="y", labelsize=8)

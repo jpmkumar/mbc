@@ -39,11 +39,17 @@ for env, lab in re.findall(r"\\begin\{(figure|table)\}.*?\\label\{([^}]*)\}", fl
     counts[k] += 1
     labels[lab] = counts[k]
 
+# section numbers from the LaTeX aux file (compile main.tex first)
+_aux = (Path(__file__).resolve().parents[1] / "manuscript_frontiers" / "main.aux")
+if _aux.exists():
+    for lab, num in re.findall(r"\\newlabel\{(sec:[^}]*)\}\{\{\{?([0-9.]+)", _aux.read_text()):
+        labels.setdefault(lab, num)
+
 
 def fix(t: str) -> str:
     t = re.sub(r"\\ref\{([^}]*)\}", lambda m: str(labels[m.group(1)]), t)
     t = re.sub(r"\\code\{([^}]*)\}", lambda m: r"\texttt{" + m.group(1).replace("_", r"\_") + "}", t)
-    t = t.replace(r"Table~", "Table ").replace(r"Tables~", "Tables ").replace(r"Figure~", "Figure ")
+    t = t.replace(r"Section~", "Section ").replace(r"Table~", "Table ").replace(r"Tables~", "Tables ").replace(r"Figure~", "Figure ")
     return t
 
 
@@ -54,6 +60,7 @@ def float_fix(env_text: str) -> str:
     env_text = env_text.replace(r"\caption{", r"\caption{" + rf"\textbf{{{kind} {n}.}} ", 1)
     env_text = re.sub(r"\\resizebox\{\\linewidth\}\{!\}\{%\s*", "", env_text)
     env_text = env_text.replace(r"\end{tabular}}", r"\end{tabular}")
+    env_text = env_text.replace(r">{\raggedright\arraybackslash}", "")
     env_text = re.sub(r"\\multicolumn\{(\d+)\}\{l\}\{(.*?)\} \\\\",
                       lambda m: m.group(2) + " &" * (int(m.group(1)) - 1) + r" \\", env_text)
     env_text = re.sub(r"\\includegraphics\[[^\]]*\]\{([^}]*)\.pdf\}",

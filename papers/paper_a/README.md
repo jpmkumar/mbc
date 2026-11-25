@@ -78,7 +78,7 @@ CICT not used. See [`VENUE.md`](VENUE.md). Active pack:
 |------|--------|
 | Reference holdout + XAI | Separate local pilot-study checkout |
 | Confirmatory 5-fold CV (malignant metrics, matched MLP) | **Done** — `results/confirmatory_cv.json` |
-| Results on GitHub | **Done** — tag `paper-a-v1.0` |
+| Results on GitHub | **Done** — tag `paper-a-v1.2` (revision; earlier `paper-a-v1.0`, `paper-a-v1.1`) |
 | Frontiers manuscript | **Active** — `manuscript_frontiers/main.tex` |
 | Scientific Reports manuscript | **Parked** — `manuscript/main.tex` |
 
